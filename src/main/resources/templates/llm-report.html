@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="|AI LLM & Agent Raporu - ${request.id}|">AI LLM Raporu</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-base: #080c14;
+      --bg-surface: #0f1626;
+      --bg-card: #151f32;
+      --border-color: rgba(255, 255, 255, 0.08);
+      
+      --color-primary: #6366f1;
+      --color-primary-glow: rgba(99, 102, 241, 0.15);
+      --color-accent: #a855f7;
+      --color-accent-glow: rgba(168, 85, 247, 0.15);
+      
+      --color-success: #10b981;
+      --color-success-glow: rgba(16, 185, 129, 0.15);
+      --color-danger: #ef4444;
+      --color-danger-glow: rgba(239, 68, 68, 0.15);
+      --color-warning: #f59e0b;
+      --color-warning-glow: rgba(245, 158, 11, 0.15);
+      --color-info: #3b82f6;
+      
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      
+      --shadow-premium: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+      --transition-base: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+      padding-bottom: 60px;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-base);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-card);
+      border-radius: 99px;
+      border: 2px solid var(--bg-base);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--color-primary);
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Premium Header */
+    header {
+      background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(15, 22, 38, 0.6) 100%);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-premium);
+      backdrop-filter: blur(10px);
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -20%;
+      width: 60%;
+      height: 200%;
+      background: radial-gradient(circle, var(--color-primary-glow) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: -50%;
+      right: -20%;
+      width: 50%;
+      height: 200%;
+      background: radial-gradient(circle, var(--color-accent-glow) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .header-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+
+    .header-title-section h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+      background: linear-gradient(to right, #fff, #a855f7, #6366f1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-title-section p {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 14px;
+      border-radius: 99px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .badge-primary { background: var(--color-primary-glow); color: #818cf8; border-color: rgba(99, 102, 241, 0.3); }
+    .badge-accent { background: var(--color-accent-glow); color: #c084fc; border-color: rgba(168, 85, 247, 0.3); }
+    .badge-success { background: var(--color-success-glow); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
+    .badge-warning { background: var(--color-warning-glow); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
+    .badge-danger { background: var(--color-danger-glow); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
+
+    /* Metadata Panel */
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      width: 100%;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .meta-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .meta-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .meta-value a {
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+
+    .meta-value a:hover {
+      text-decoration: underline;
+    }
+
+    /* Main Grid Layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 350px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 1024px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Left Sidebar: Agent Orchestration Flow */
+    .sidebar {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-premium);
+    }
+
+    .sidebar-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+
+    /* Agent Timeline Step style */
+    .agent-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+    }
+
+    .agent-timeline::before {
+      content: '';
+      position: absolute;
+      top: 16px;
+      left: 19px;
+      bottom: 16px;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--color-primary), var(--color-accent));
+      opacity: 0.3;
+    }
+
+    .agent-step {
+      display: flex;
+      gap: 16px;
+      cursor: pointer;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      transition: var(--transition-base);
+      position: relative;
+      z-index: 1;
+    }
+
+    .agent-step:hover {
+      background: rgba(255,255,255,0.02);
+      border-color: rgba(255,255,255,0.04);
+    }
+
+    .agent-step.active {
+      background: var(--bg-card);
+      border-color: var(--border-color);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .agent-icon-wrap {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      transition: var(--transition-base);
+    }
+
+    .agent-step.active .agent-icon-wrap {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 10px var(--color-primary-glow);
+      background: var(--color-primary-glow);
+    }
+
+    .agent-step-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .agent-step-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .agent-step-role {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Right Side: Detailed View Panels */
+    .details-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-premium);
+      display: none; /* Controlled via JS */
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    .card.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 16px;
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .agent-report-content {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: #e2e8f0;
+      white-space: pre-line;
+    }
+
+    /* File List & Code Display Grid */
+    .file-tabs {
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 20px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .file-tab {
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      border-bottom: 2px solid transparent;
+      transition: var(--transition-base);
+      white-space: nowrap;
+    }
+
+    .file-tab:hover {
+      color: var(--text-main);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .file-tab.active {
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
+      background: var(--bg-card);
+    }
+
+    /* Test Case Details Card Layout */
+    .tc-split-view {
+      display: grid;
+      grid-template-columns: 40% 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .tc-split-view {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .tc-meta-info {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .tc-info-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 16px;
+    }
+
+    .tc-info-section h4 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tc-info-section p {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    .code-viewer {
+      position: relative;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      background: #090d16;
+    }
+
+    .code-header {
+      background: #111827;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .code-lang-label {
+      font-family: 'Outfit', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .btn-copy {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: var(--transition-base);
+    }
+
+    .btn-copy:hover {
+      color: var(--text-main);
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    pre {
+      margin: 0;
+      padding: 16px;
+      overflow: auto;
+      max-height: 550px;
+    }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #e2e8f0;
+      display: block;
+    }
+
+    /* Terminal logs for self-healing */
+    .terminal-window {
+      background: #070a12;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 16px;
+    }
+
+    .terminal-header {
+      background: #111622;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .terminal-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .terminal-dot-red { background: #ef4444; }
+    .terminal-dot-yellow { background: #f59e0b; }
+    .terminal-dot-green { background: #10b981; }
+
+    .terminal-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 8px;
+    }
+
+    .terminal-body {
+      padding: 16px;
+      font-size: 12px;
+      color: #38bdf8;
+      overflow-y: auto;
+      max-height: 250px;
+      white-space: pre-wrap;
+    }
+
+    .section-tabs {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+
+    .section-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: var(--transition-base);
+    }
+
+    .section-tab:hover {
+      color: var(--text-main);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .section-tab.active {
+      color: #fff;
+      background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+      box-shadow: 0 4px 12px var(--color-primary-glow);
+    }
+
+    .content-section {
+      display: none;
+    }
+
+    .content-section.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- HEADER PANEL -->
+  <header>
+    <div class="header-content">
+      <div class="header-title-section">
+        <h1>🤖 AI LLM Raporu & Agent Analizi</h1>
+        <p>Çoklu LLM Agent Yapılandırması ve Kod Üretim Detay Raporu</p>
+      </div>
+      <div>
+        <span class="badge badge-primary" th:text="${request.framework.name()}">FRAMEWORK</span>
+        <span class="badge badge-accent" th:text="${request.testType.name()}">TEST TYPE</span>
+        <span th:if="${request.status.name() == 'GENERATED'}" class="badge badge-success">GENERATED</span>
+        <span th:if="${request.status.name() == 'PENDING'}" class="badge badge-warning">PENDING</span>
+        <span th:if="${request.status.name() == 'FAILED'}" class="badge badge-danger">FAILED</span>
+      </div>
+    </div>
+
+    <!-- METADATA INFORMATION -->
+    <div class="meta-grid">
+      <div class="meta-item">
+        <span class="meta-label">Request ID</span>
+        <span class="meta-value" th:text="${request.id}">-</span>
+      </div>
+      <div class="meta-item" th:if="${request.userStory != null}">
+        <span class="meta-label">Kullanıcı Hikayesi (User Story)</span>
+        <span class="meta-value" th:text="${request.userStory}">-</span>
+      </div>
+      <div class="meta-item" th:if="${request.swaggerUrl != null}">
+        <span class="meta-label">Swagger / OpenAPI URL</span>
+        <span class="meta-value">
+          <a th:href="${request.swaggerUrl}" target="_blank" th:text="${request.swaggerUrl}">-</a>
+        </span>
+      </div>
+      <div class="meta-item" th:if="${request.applicationUrl != null}">
+        <span class="meta-label">Uygulama Adresi (URL)</span>
+        <span class="meta-value">
+          <a th:href="${request.applicationUrl}" target="_blank" th:text="${request.applicationUrl}">-</a>
+        </span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Oluşturulma Tarihi</span>
+        <span class="meta-value" th:text="${formattedDate}">-</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAVIGATION TABS -->
+  <div class="section-tabs">
+    <button class="section-tab" th:classappend="${#lists.isEmpty(analyses)} ? '' : 'active'" onclick="switchSection('agents')">
+      👥 Çoklu Agent Analizleri
+    </button>
+    <button class="section-tab" th:classappend="${#lists.isEmpty(analyses)} ? 'active' : ''" onclick="switchSection('code')">
+      💻 Üretilen Test Kodları
+    </button>
+    <button class="section-tab" onclick="switchSection('fixes')">
+      🔧 Self-Healing & İyileştirme
+    </button>
+  </div>
+
+  <!-- SECTION 1: MULTI-AGENT WORKFLOW -->
+  <div id="section-agents" class="content-section" th:classappend="${#lists.isEmpty(analyses)} ? '' : 'active'">
+    <div class="main-grid">
+      
+      <!-- Agent Timeline Side Menu -->
+      <div class="sidebar">
+        <div class="sidebar-title">
+          <span>👥 Agent İş Akışı</span>
+        </div>
+        <div class="agent-timeline" th:if="${not #lists.isEmpty(analyses)}">
+          <div th:each="analysis, iter : ${analyses}" 
+               th:classappend="${iter.first} ? 'agent-step active' : 'agent-step'"
+               th:data-role="${analysis.role}"
+               onclick="switchAgent(this.getAttribute('data-role'))"
+               th:id="|step-${analysis.role}|">
+            <div class="agent-icon-wrap" th:text="${#strings.substring(analysis.role, 0, 1)}">A</div>
+            <div class="agent-step-info">
+              <span class="agent-step-title" th:text="${analysis.title}">Agent Title</span>
+              <span class="agent-step-role" th:text="${analysis.role}">Role</span>
+            </div>
+          </div>
+        </div>
+        <div th:if="${#lists.isEmpty(analyses)}" style="color: var(--text-dim); text-align: center; padding: 20px;">
+          Bu çalışma için henüz agent analizi bulunmamaktadır.
+        </div>
+      </div>
+
+      <!-- Agent Detailed View Panel -->
+      <div class="details-panel" th:if="${not #lists.isEmpty(analyses)}">
+        <div th:each="analysis, iter : ${analyses}" 
+             th:classappend="${iter.first} ? 'card active' : 'card'"
+             th:id="|card-${analysis.role}|">
+          
+          <div class="card-header-row">
+            <h3 class="card-title">
+              <span>🤖</span>
+              <span th:text="${analysis.title}">Agent Title</span>
+            </h3>
+            <span class="badge badge-primary" th:text="${analysis.role}">ROLE</span>
+          </div>
+
+          <div class="agent-report-content" th:text="${analysis.analysis}">
+            Analysis Output Content
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2: GENERATED CODE & NARRATIVES -->
+  <div id="section-code" class="content-section" th:classappend="${#lists.isEmpty(analyses)} ? 'active' : ''">
+    <div class="sidebar" style="margin-bottom: 24px;" th:if="${#lists.isEmpty(testCases)}">
+      <div style="color: var(--text-dim); text-align: center; padding: 40px 0;">
+        Bu istek için üretilmiş test case bulunamadı.
+      </div>
+    </div>
+
+    <div th:if="${not #lists.isEmpty(testCases)}">
+      <!-- File Tabs -->
+      <div class="file-tabs">
+        <button th:each="tc, iter : ${testCases}" 
+                th:classappend="${iter.first} ? 'file-tab active' : 'file-tab'"
+                th:id="|tab-${tc.id}|"
+                th:data-id="${tc.id}"
+                onclick="switchFile(this.getAttribute('data-id'))"
+                th:text="${tc.fileName}">
+          FileName.java
+        </button>
+      </div>
+
+      <!-- Code Cards Details -->
+      <div th:each="tc, iter : ${testCases}" 
+           th:classappend="${iter.first} ? 'card active' : 'card'"
+           th:id="|filecard-${tc.id}|"
+           style="background: var(--bg-surface); padding: 24px; border: 1px solid var(--border-color);">
+        
+        <div class="tc-split-view">
+          
+          <!-- Narrative & Meta on the Left -->
+          <div class="tc-meta-info">
+            <div class="card-header-row" style="margin-bottom: 0; border: none; padding: 0;">
+              <h3 class="card-title" th:text="${tc.testName}">TestCaseName</h3>
+            </div>
+
+            <div class="tc-info-section">
+              <h4><span>📌</span> Test Durumu</h4>
+              <span th:if="${tc.runStatus.name() == 'PASSED'}" class="badge badge-success">PASSED</span>
+              <span th:if="${tc.runStatus.name() == 'FAILED'}" class="badge badge-danger">FAILED</span>
+              <span th:if="${tc.runStatus.name() == 'SKIPPED'}" class="badge badge-warning">SKIPPED</span>
+              <span th:if="${tc.runStatus.name() == 'NOT_RUN'}" class="badge badge-primary">NOT RUN</span>
+            </div>
+
+            <div class="tc-info-section">
+              <h4><span>💡</span> LLM Test Senaryosu Özeti</h4>
+              <p th:text="${tc.testSummary != null ? tc.testSummary : 'Özet bulunmamaktadır.'}">Summary info...</p>
+            </div>
+
+            <div class="tc-info-section">
+              <h4><span>📝</span> LLM Üretim Açıklaması (Narrative)</h4>
+              <p th:text="${tc.generationNarrative != null ? tc.generationNarrative : 'Üretim açıklaması bulunmamaktadır.'}">Narrative details...</p>
+            </div>
+            
+            <div class="tc-info-section" th:if="${tc.executionTimeMs != null}">
+              <h4><span>⏳</span> Koşum Süresi</h4>
+              <p th:text="|${tc.executionTimeMs} ms|">0 ms</p>
+            </div>
+          </div>
+
+          <!-- Code View on the Right -->
+          <div class="code-viewer">
+            <div class="code-header">
+              <span class="code-lang-label" th:text="${#strings.substringAfter(tc.fileName, '.')}">LANG</span>
+              <button class="btn-copy" th:data-target="|code-${tc.id}|" onclick="copyCode(this.getAttribute('data-target'))">
+                <span>📋</span> Kodu Kopyala
+              </button>
+            </div>
+            <pre><code th:id="|code-${tc.id}|" th:text="${tc.testContent}">// Code here...</code></pre>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: SELF-HEALING & IMPROVEMENTS -->
+  <div id="section-fixes" class="content-section">
+    <div class="details-panel">
+      <!-- Title -->
+      <div class="card active" style="display: block;">
+        <div class="card-header-row">
+          <h3 class="card-title">
+            <span>🔧</span>
+            <span>Self-Healing ve Hata İyileştirme Raporu</span>
+          </h3>
+        </div>
+
+        <div th:if="${#lists.isEmpty(testCases)}" style="color: var(--text-dim); padding: 20px 0; text-align: center;">
+          İyileştirme detayı bulunmamaktadır.
+        </div>
+
+        <div th:if="${not #lists.isEmpty(testCases)}">
+          <th:block th:each="tc : ${testCases}">
+            <div th:if="${tc.improvementNarrative != null or tc.runStatus.name() == 'FAILED'}" style="margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 24px;">
+              
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h4 style="font-size: 16px; color: var(--color-accent);" th:text="${tc.testName}">TestName</h4>
+                <span th:if="${tc.runStatus.name() == 'FAILED'}" class="badge badge-danger">İyileştirme Adayı</span>
+                <span th:if="${tc.runStatus.name() == 'PASSED'}" class="badge badge-success">Düzeltildi</span>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
+                <div class="tc-info-section" style="background: rgba(168, 85, 247, 0.05); border-color: rgba(168, 85, 247, 0.2);">
+                  <h4 style="color: var(--color-accent);"><span>💡</span> LLM İyileştirme Analizi</h4>
+                  <p th:text="${tc.improvementNarrative != null ? tc.improvementNarrative : 'Test başarısız oldu, düzeltilmek üzere bir sonraki otomatik iyileştirme döngüsüne eklendi.'}">Improvement Narrative details...</p>
+                </div>
+
+                <!-- Terminal logs if available -->
+                <div class="terminal-window" th:if="${tc.runOutput != null}">
+                  <div class="terminal-header">
+                    <span class="terminal-dot terminal-dot-red"></span>
+                    <span class="terminal-dot terminal-dot-yellow"></span>
+                    <span class="terminal-dot terminal-dot-green"></span>
+                    <span class="terminal-title">Runner Console logs</span>
+                  </div>
+                  <div class="terminal-body" th:text="${tc.runOutput}">Logs...</div>
+                </div>
+              </div>
+
+            </div>
+          </th:block>
+        </div>
+
+        <div th:if="${not #lists.isEmpty(testCases) and #lists.isEmpty(testCases.?[improvementNarrative != null or runStatus.name() == 'FAILED'])}" style="color: var(--text-dim); text-align: center; padding: 40px 0;">
+          Tüm testler başarıyla geçti! Self-healing tetiklenmesine ihtiyaç duyulmadı.
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function switchSection(sectionId) {
+    // Switch active nav buttons
+    document.querySelectorAll('.section-tab').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    event.currentTarget.classList.add('active');
+
+    // Switch active section content
+    document.querySelectorAll('.content-section').forEach(sec => {
+      sec.classList.remove('active');
+    });
+    document.getElementById('section-' + sectionId).classList.add('active');
+  }
+
+  function switchAgent(roleId) {
+    // Sidebar active step
+    document.querySelectorAll('#section-agents .agent-step').forEach(step => {
+      step.classList.remove('active');
+    });
+    document.getElementById('step-' + roleId).classList.add('active');
+
+    // Content card active
+    document.querySelectorAll('#section-agents .card').forEach(card => {
+      card.classList.remove('active');
+    });
+    document.getElementById('card-' + roleId).classList.add('active');
+  }
+
+  function switchFile(tcId) {
+    // Tabs active
+    document.querySelectorAll('#section-code .file-tab').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    document.getElementById('tab-' + tcId).classList.add('active');
+
+    // Code cards active
+    document.querySelectorAll('#section-code .card').forEach(card => {
+      card.classList.remove('active');
+    });
+    document.getElementById('filecard-' + tcId).classList.add('active');
+  }
+
+  function copyCode(elementId) {
+    var codeElement = document.getElementById(elementId);
+    var text = codeElement.innerText;
+    
+    navigator.clipboard.writeText(text).then(function() {
+      // Temporary tooltip style notification
+      var btn = event.currentTarget;
+      var originalHtml = btn.innerHTML;
+      btn.innerHTML = '<span>✅</span> Kopyalandı!';
+      btn.style.borderColor = 'var(--color-success)';
+      btn.style.color = 'var(--color-success)';
+      setTimeout(function() {
+        btn.innerHTML = originalHtml;
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      }, 2000);
+    }, function(err) {
+      console.error('Kopyalama başarısız: ', err);
+    });
+  }
+</script>
+
+</body>
+</html>

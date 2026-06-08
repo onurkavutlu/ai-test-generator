@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Test Generator – Rapor</title>
+  <style>
+    /* ── Reset ── */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background-color: #f0f4f8;
+      font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+      color: #1a202c;
+    }
+    a { color: #4f46e5; text-decoration: none; }
+
+    /* ── Wrapper ── */
+    .wrapper {
+      max-width: 680px;
+      margin: 32px auto;
+      background: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,.10);
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      padding: 32px 40px;
+      text-align: center;
+    }
+    .header-logo {
+      font-size: 28px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+    }
+    .header-logo span { color: #818cf8; }
+    .header-sub {
+      color: #94a3b8;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    /* ── Status Banner ── */
+    .status-banner {
+      padding: 20px 40px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .status-banner.passed  { background: #f0fdf4; border-left: 5px solid #22c55e; }
+    .status-banner.failed  { background: #fff1f2; border-left: 5px solid #ef4444; }
+    .status-banner.partial { background: #fffbeb; border-left: 5px solid #f59e0b; }
+    .status-icon { font-size: 36px; flex-shrink: 0; }
+    .status-title { font-size: 18px; font-weight: 700; }
+    .status-sub   { font-size: 13px; color: #64748b; margin-top: 2px; }
+
+    /* ── Content ── */
+    .content { padding: 32px 40px; }
+
+    /* ── Stats grid ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin: 20px 0 28px;
+    }
+    .stat-card {
+      border-radius: 10px;
+      padding: 16px 12px;
+      text-align: center;
+      border: 1px solid;
+    }
+    .stat-card.total   { background: #f8fafc; border-color: #e2e8f0; }
+    .stat-card.passed  { background: #f0fdf4; border-color: #bbf7d0; }
+    .stat-card.failed  { background: #fff1f2; border-color: #fecaca; }
+    .stat-card.skipped { background: #fefce8; border-color: #fef08a; }
+    .stat-num  { font-size: 28px; font-weight: 800; line-height: 1; }
+    .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase;
+                  letter-spacing: 0.8px; color: #64748b; margin-top: 4px; }
+    .stat-card.total   .stat-num { color: #334155; }
+    .stat-card.passed  .stat-num { color: #16a34a; }
+    .stat-card.failed  .stat-num { color: #dc2626; }
+    .stat-card.skipped .stat-num { color: #ca8a04; }
+
+    /* ── Progress bar ── */
+    .progress-wrap { margin: 0 0 28px; }
+    .progress-label {
+      display: flex; justify-content: space-between;
+      font-size: 13px; color: #475569; margin-bottom: 8px;
+    }
+    .progress-bar {
+      height: 10px; border-radius: 99px;
+      background: #e2e8f0; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      transition: width .4s ease;
+    }
+
+    /* ── Framework table ── */
+    .section-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: #94a3b8; margin-bottom: 12px;
+    }
+    table {
+      width: 100%; border-collapse: collapse;
+      font-size: 13px; margin-bottom: 28px;
+    }
+    th {
+      background: #f8fafc; text-align: left;
+      padding: 10px 14px; font-weight: 600; color: #475569;
+      border-bottom: 2px solid #e2e8f0;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    /* ── Test case rows ── */
+    .tc-name { font-weight: 600; color: #1e293b; font-size: 13px; }
+    .tc-framework {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .fw-karate   { background: #ecfdf5; color: #059669; }
+    .fw-selenium { background: #fff7ed; color: #ea580c; }
+    .fw-appium   { background: #eff6ff; color: #2563eb; }
+    .tc-status {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 600; padding: 3px 10px;
+      border-radius: 99px;
+    }
+    .tc-status.passed  { background: #f0fdf4; color: #16a34a; }
+    .tc-status.failed  { background: #fff1f2; color: #dc2626; }
+    .tc-status.skipped { background: #fefce8; color: #ca8a04; }
+    .tc-status.not_run { background: #f8fafc; color: #94a3b8; }
+    .tc-time { color: #94a3b8; font-size: 12px; font-family: monospace; }
+
+    /* ── CTA Button ── */
+    .cta-wrap { text-align: center; margin: 28px 0; }
+    .cta-btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #ffffff !important;
+      padding: 14px 32px; border-radius: 10px;
+      font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
+      box-shadow: 0 4px 12px rgba(79,70,229,.35);
+    }
+
+    /* ── Info box ── */
+    .info-box {
+      background: #f8fafc; border: 1px solid #e2e8f0;
+      border-radius: 10px; padding: 16px 20px;
+      font-size: 13px; color: #475569; margin-bottom: 20px;
+    }
+    .info-box strong { color: #1e293b; }
+    .info-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .info-row:not(:last-child) { border-bottom: 1px solid #e2e8f0; }
+
+    /* ── Footer ── */
+    .footer {
+      background: #f8fafc; border-top: 1px solid #e2e8f0;
+      padding: 20px 40px; text-align: center;
+      font-size: 12px; color: #94a3b8;
+    }
+    .footer a { color: #6366f1; }
+  </style>
+</head>
+<body>
+  <!-- Şablonlar bu layout'u extend eder -->
+  <div layout:fragment="content"></div>
+</body>
+</html>

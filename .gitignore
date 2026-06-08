@@ -1,0 +1,31 @@
+# Build
+target/
+*.jar
+*.war
+
+# IDE
+.idea/
+!.idea/runConfigurations/
+*.iml
+.vscode/
+*.swp
+
+# Env (API key'leri commit etme!)
+.env
+
+# Test output
+/tmp/
+generated-tests/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# AspectJ dump files (test run artifacts)
+ajcore.*.txt
+
+# Allure results (generated at runtime)
+allure-results/

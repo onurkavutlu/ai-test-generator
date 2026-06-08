@@ -1,0 +1,120 @@
+---
+# ─────────────────────────────────────────────────────────
+# Allure Report Server – OpenShift Deployment
+# Üretilen HTML raporları nginx ile serve eder
+# ─────────────────────────────────────────────────────────
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: allure-report-server
+  namespace: ai-test-generator
+  labels:
+    app: allure-report-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: allure-report-server
+  template:
+    metadata:
+      labels:
+        app: allure-report-server
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: report-storage
+              mountPath: /usr/share/nginx/html
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+      volumes:
+        - name: report-storage
+          persistentVolumeClaim:
+            claimName: allure-reports-pvc
+        - name: nginx-config
+          configMap:
+            name: allure-nginx-config
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: allure-nginx-config
+  namespace: ai-test-generator
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # CORS – AI Test Generator app'ine izin ver
+        add_header Access-Control-Allow-Origin "https://ai-test-generator.apps.ocp.local";
+        add_header X-Frame-Options SAMEORIGIN;
+
+        location / {
+            try_files $uri $uri/ /index.html;
+            autoindex on;
+        }
+
+        # Sağlık kontrolü
+        location /health {
+            return 200 "OK\n";
+            add_header Content-Type text/plain;
+        }
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: allure-report-svc
+  namespace: ai-test-generator
+spec:
+  selector:
+    app: allure-report-server
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: allure-report-route
+  namespace: ai-test-generator
+spec:
+  host: allure.apps.ocp.local
+  to:
+    kind: Service
+    name: allure-report-svc
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+---
+# Allure raporlarını persist etmek için PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: allure-reports-pvc
+  namespace: ai-test-generator
+spec:
+  accessModes:
+    - ReadWriteMany   # Birden fazla pod yazabilsin
+  resources:
+    requests:
+      storage: 10Gi

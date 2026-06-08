@@ -1,0 +1,465 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Test Generator – Jenkins Declarative Pipeline
+// ─────────────────────────────────────────────────────────────────────────────
+// Aşamalar:
+//   1. Checkout        – kaynak kod
+//   2. Build & Test    – Maven build + unit testler
+//   3. Code Quality    – SonarQube analizi
+//   4. Docker Build    – imaj oluştur
+//   5. Push Registry   – OCP iç registry'sine gönder
+//   6. Deploy Dev      – dev namespace'ine deploy
+//   7. Smoke Test      – temel API kontrolleri
+//   8. Deploy Staging  – (onay sonrası) staging deploy
+//   9. Generate Tests  – LLM ile test case üretimi (AI magic!)
+//  10. Run AI Tests    – üretilen testleri çalıştır
+//  11. Report          – sonuçları yayınla
+// ─────────────────────────────────────────────────────────────────────────────
+
+pipeline {
+    agent {
+        kubernetes {
+            yaml '''
+                apiVersion: v1
+                kind: Pod
+                spec:
+                  containers:
+                  - name: maven
+                    image: maven:3.9.6-eclipse-temurin-17
+                    command: ["sleep", "infinity"]
+                    resources:
+                      requests:
+                        memory: "1Gi"
+                        cpu: "500m"
+                  - name: docker
+                    image: docker:24-dind
+                    securityContext:
+                      privileged: true
+                    command: ["dockerd-entrypoint.sh"]
+                  - name: oc
+                    image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+                    command: ["sleep", "infinity"]
+                  - name: trivy
+                    image: aquasec/trivy:latest
+                    command: ["sleep", "infinity"]
+            '''
+        }
+    }
+
+    environment {
+        APP_NAME        = 'ai-test-generator'
+        OCP_REGISTRY    = 'registry.ocp.local'
+        OCP_NAMESPACE   = 'ai-test-generator'
+        IMAGE_TAG       = "${BUILD_NUMBER}"
+        FULL_IMAGE      = "${OCP_REGISTRY}/${OCP_NAMESPACE}/${APP_NAME}:${IMAGE_TAG}"
+        SONAR_HOST      = 'http://sonarqube.tools.svc:9000'
+        DEV_URL         = 'http://ai-test-generator.apps-dev.ocp.local'
+        STG_URL         = 'http://ai-test-generator.apps-stg.ocp.local'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 60, unit: 'MINUTES')
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        // ─────────────────────────────────────────────
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    echo "Build: ${env.BUILD_NUMBER} | Commit: ${env.GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('SecOps - Secret Scan') {
+            steps {
+                container('trivy') {
+                    echo "Codebase secret scanning with Trivy..."
+                    // Trivy filesystem scan for secrets. Fails build if secrets are found (--exit-code 1).
+                    sh 'trivy fs --exit-code 1 --scanners secret .'
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('Build & Unit Tests') {
+            steps {
+                container('maven') {
+                    sh 'mvn clean verify -DskipIntegrationTests'
+                }
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                    jacoco(
+                        execPattern: 'target/jacoco.exec',
+                        classPattern: 'target/classes',
+                        sourcePattern: 'src/main/java'
+                    )
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('SecOps - Dependency Scan') {
+            steps {
+                container('maven') {
+                    echo "OWASP Dependency-Check vulnerability scanning..."
+                    // Execute dependency vulnerability scans. Report in target/dependency-check-report.html
+                    sh 'mvn org.owasp:dependency-check-maven:9.0.9:check -Dformat=HTML -DfailBuildOnCVSS=7.0 || true'
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'target/dependency-check-report.html', allowEmptyArchive: true
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('Code Quality - SonarQube') {
+            when { branch pattern: "main|develop|release/.*", comparator: "REGEXP" }
+            steps {
+                container('maven') {
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            mvn sonar:sonar \
+                                -Dsonar.projectKey=${APP_NAME} \
+                                -Dsonar.host.url=${SONAR_HOST} \
+                                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                        """
+                    }
+                    timeout(time: 5, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: true
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('Docker Build') {
+            steps {
+                container('docker') {
+                    sh "docker build -t ${FULL_IMAGE} ."
+                    sh "docker tag ${FULL_IMAGE} ${OCP_REGISTRY}/${OCP_NAMESPACE}/${APP_NAME}:latest"
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('SecOps - Container Scan') {
+            steps {
+                container('trivy') {
+                    echo "Container image vulnerability scanning with Trivy..."
+                    // Trivy scanning container image. Reports high/critical CVEs.
+                    sh "trivy image --exit-code 0 --severity HIGH,CRITICAL ${FULL_IMAGE}"
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('Push to OCP Registry') {
+            steps {
+                container('docker') {
+                    withCredentials([usernamePassword(
+                            credentialsId: 'ocp-registry-creds',
+                            usernameVariable: 'REG_USER',
+                            passwordVariable: 'REG_PASS')]) {
+                        sh "docker login ${OCP_REGISTRY} -u ${REG_USER} -p ${REG_PASS}"
+                        sh "docker push ${FULL_IMAGE}"
+                        sh "docker push ${OCP_REGISTRY}/${OCP_NAMESPACE}/${APP_NAME}:latest"
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('Deploy to Dev') {
+            steps {
+                container('oc') {
+                    withCredentials([string(credentialsId: 'ocp-token-dev', variable: 'OCP_TOKEN')]) {
+                        sh """
+                            oc login --token=${OCP_TOKEN} --server=https://api.ocp.local:6443 \
+                               --insecure-skip-tls-verify
+                            oc project ${OCP_NAMESPACE}-dev
+
+                            # Image tag güncelle
+                            oc set image deployment/${APP_NAME} \
+                                ${APP_NAME}=${FULL_IMAGE} \
+                                -n ${OCP_NAMESPACE}-dev
+
+                            # Rollout bekle
+                            oc rollout status deployment/${APP_NAME} \
+                                -n ${OCP_NAMESPACE}-dev \
+                                --timeout=3m
+                        """
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('Smoke Tests') {
+            steps {
+                container('maven') {
+                    sh """
+                        # Health check
+                        curl -f ${DEV_URL}/api/v1/tests/health || exit 1
+                        curl -f ${DEV_URL}/actuator/health || exit 1
+                        echo "Smoke testler başarılı"
+                    """
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('Run Regression Tests') {
+            steps {
+                container('maven') {
+                    echo "Running standalone regression tests targeting ${DEV_URL}..."
+                    // Execute specific Karate regression suite targeting DEV environment
+                    sh "mvn test -Dtest=com.testgen.runner.RegressionRunner -DbaseUrl=${DEV_URL}"
+                }
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('🤖 AI Test Generation') {
+            steps {
+                container('maven') {
+                    withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_KEY')]) {
+                        script {
+                            echo "LLM ile test case'ler üretiliyor..."
+
+                            // Backend API testleri üret
+                            def karateResponse = sh(script: """
+                                curl -s -X POST ${DEV_URL}/api/v1/tests/generate \\
+                                    -H 'Content-Type: application/json' \\
+                                    -d '{
+                                        "testType": "BACKEND_API",
+                                        "framework": "KARATE",
+                                        "swaggerUrl": "${DEV_URL}/v3/api-docs",
+                                        "additionalContext": "CI/CD pipeline triggered test generation"
+                                    }'
+                            """, returnStdout: true).trim()
+
+                            def karateJson = readJSON text: karateResponse
+                            env.KARATE_REQUEST_ID = karateJson.requestId
+                            echo "Karate testler üretiliyor - requestId: ${env.KARATE_REQUEST_ID}"
+
+                            // Frontend testleri üret
+                            def seleniumResponse = sh(script: """
+                                curl -s -X POST ${DEV_URL}/api/v1/tests/generate \\
+                                    -H 'Content-Type: application/json' \\
+                                    -d '{
+                                        "testType": "FRONTEND_WEB",
+                                        "framework": "SELENIUM",
+                                        "applicationUrl": "${DEV_URL}",
+                                        "userStory": "Kullanıcı test generation arayüzünü kullanabilmeli"
+                                    }'
+                            """, returnStdout: true).trim()
+
+                            def seleniumJson = readJSON text: seleniumResponse
+                            env.SELENIUM_REQUEST_ID = seleniumJson.requestId
+
+                            // Üretim tamamlanana kadar bekle (max 3 dk)
+                            timeout(time: 3, unit: 'MINUTES') {
+                                waitUntil {
+                                    def status = sh(script: """
+                                        curl -s ${DEV_URL}/api/v1/tests/${env.KARATE_REQUEST_ID} | \
+                                        python3 -c "import sys,json; d=json.load(sys.stdin); print(d['status'])"
+                                    """, returnStdout: true).trim()
+                                    echo "Karate üretim durumu: ${status}"
+                                    return status in ['GENERATED', 'FAILED']
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('▶ Run AI-Generated Tests') {
+            parallel {
+                stage('Run Karate Tests') {
+                    steps {
+                        container('maven') {
+                            script {
+                                def cases = sh(script: """
+                                    curl -s ${DEV_URL}/api/v1/tests/${env.KARATE_REQUEST_ID}/cases
+                                """, returnStdout: true).trim()
+
+                                def casesJson = readJSON text: cases
+                                casesJson.each { tc ->
+                                    sh """
+                                        curl -s -X POST ${DEV_URL}/api/v1/tests/cases/${tc.id}/run
+                                    """
+                                    echo "Karate test çalıştırıldı: ${tc.testName}"
+                                }
+                            }
+                        }
+                    }
+                }
+
+                stage('Run Selenium Tests') {
+                    steps {
+                        container('maven') {
+                            script {
+                                def cases = sh(script: """
+                                    curl -s ${DEV_URL}/api/v1/tests/${env.SELENIUM_REQUEST_ID}/cases
+                                """, returnStdout: true).trim()
+
+                                def casesJson = readJSON text: cases
+                                casesJson.each { tc ->
+                                    sh """
+                                        curl -s -X POST ${DEV_URL}/api/v1/tests/cases/${tc.id}/run
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('📊 Allure Report & Email') {
+            steps {
+                container('maven') {
+                    script {
+                        echo "Allure raporu üretiliyor ve email gönderiliyor..."
+
+                        // Tüm test case'leri çalıştır + Allure + Email tek seferde
+                        withCredentials([string(credentialsId: 'report-email-recipients', variable: 'EMAIL_LIST')]) {
+                            sh """
+                                curl -s -X POST \
+                                    "${DEV_URL}/api/v1/tests/${env.KARATE_REQUEST_ID}/run-all?recipients=${EMAIL_LIST}" \
+                                    -H 'Content-Type: application/json'
+
+                                curl -s -X POST \
+                                    "${DEV_URL}/api/v1/tests/${env.SELENIUM_REQUEST_ID}/run-all?recipients=${EMAIL_LIST}" \
+                                    -H 'Content-Type: application/json'
+                            """
+                        }
+
+                        // Allure HTML raporu yerel Maven ile de üret (Jenkins artifact için)
+                        sh '''
+                            mvn allure:report -q || true
+                        '''
+
+                        // Allure sonuçlarını Jenkins'e kopyala
+                        sh '''
+                            mkdir -p target/allure-results
+                            # Servis'in ürettiği result'ları çek
+                            curl -s "${DEV_URL}/api/v1/reports/${KARATE_REQUEST_ID}/download" \
+                                 -o target/allure-results/karate-results.zip || true
+                        '''
+
+                        env.ALLURE_REPORT_URL = "https://allure.apps.ocp.local/${env.KARATE_REQUEST_ID}/index.html"
+                        echo "Allure raporu: ${env.ALLURE_REPORT_URL}"
+                    }
+                }
+            }
+            post {
+                always {
+                    // Jenkins Allure Plugin ile raporu yayınla
+                    allure([
+                        includeProperties: true,
+                        jdk: '',
+                        properties: [],
+                        reportBuildPolicy: 'ALWAYS',
+                        results: [[path: 'target/allure-results']]
+                    ])
+
+                    // HTML publisher (allure plugin yoksa backup)
+                    publishHTML([
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'target/allure-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Allure Test Report',
+                        reportTitles: 'AI Test Generator – Allure'
+                    ])
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────
+        stage('Deploy to Staging') {
+            when { branch 'main' }
+            input {
+                message "Staging ortamına deploy edilsin mi?"
+                ok "Deploy Et"
+                submitter "lead-developer,qa-lead"
+            }
+            steps {
+                container('oc') {
+                    withCredentials([string(credentialsId: 'ocp-token-stg', variable: 'OCP_TOKEN')]) {
+                        sh """
+                            oc login --token=${OCP_TOKEN} --server=https://api.ocp.local:6443 \
+                               --insecure-skip-tls-verify
+                            oc project ${OCP_NAMESPACE}-staging
+
+                            oc set image deployment/${APP_NAME} \
+                                ${APP_NAME}=${FULL_IMAGE} \
+                                -n ${OCP_NAMESPACE}-staging
+
+                            oc rollout status deployment/${APP_NAME} \
+                                -n ${OCP_NAMESPACE}-staging \
+                                --timeout=3m
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────
+    post {
+        always {
+            publishHTML([
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'target/site/jacoco',
+                reportFiles: 'index.html',
+                reportName: 'JaCoCo Coverage Report'
+            ])
+        }
+        success {
+            slackSend(
+                channel: '#test-automation',
+                color: 'good',
+                message: """✅ *${APP_NAME}* build #${BUILD_NUMBER} başarılı!
+                    Branch: ${BRANCH_NAME} | Commit: ${GIT_COMMIT_SHORT}
+                    AI testler üretildi ve çalıştırıldı 🤖
+                    ${BUILD_URL}"""
+            )
+        }
+        failure {
+            slackSend(
+                channel: '#test-automation',
+                color: 'danger',
+                message: """❌ *${APP_NAME}* build #${BUILD_NUMBER} başarısız!
+                    Branch: ${BRANCH_NAME}
+                    ${BUILD_URL}"""
+            )
+        }
+        cleanup {
+            cleanWs()
+        }
+    }
+}

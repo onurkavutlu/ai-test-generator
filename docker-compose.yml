@@ -1,0 +1,163 @@
+# ═══════════════════════════════════════════════════════════════
+#  AI Test Generator — Ollama Edition
+#  Tek komut: docker compose up -d
+#  Servisler:
+#    app          → http://localhost:8080  (API)
+#    ollama       → http://localhost:11434 (LLM)
+#    postgres     → localhost:5432
+#    mailhog      → http://localhost:8025  (email önizleme)
+#    allure-server→ http://localhost:8888  (test raporları)
+#    selenium-hub → http://localhost:4444
+#    pgadmin      → http://localhost:5050  (opsiyonel)
+# ═══════════════════════════════════════════════════════════════
+
+services:
+
+
+  # ─── Ana Uygulama ────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-test-generator
+    ports:
+      - "8080:8080"
+    environment:
+      # ── LLM: Ollama (OpenAI key gerekmez) ──
+      LLM_PROVIDER: ollama
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: qwen2.5-coder:1.5b
+      # ── OpenAI (kullanılmıyor ama boş geçmemeli) ──
+      OPENAI_API_KEY: not-needed
+      # ── Database ──
+      DB_URL: jdbc:postgresql://postgres:5432/testgen
+      DB_USER: testgen
+      DB_PASS: testgen
+      # ── Selenium ──
+      SELENIUM_HEADLESS: "true"
+      SELENIUM_REMOTE_URL: http://selenium-hub:4444/wd/hub
+      # ── Appium ──
+      APPIUM_SERVER_URL: http://appium:4723
+      # ── Test Output ──
+      TEST_OUTPUT_PATH: /tmp/generated-tests
+      # ── Email (MailHog) ──
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
+      MAIL_USERNAME: testgen@local.dev
+      MAIL_PASSWORD: ""
+      EMAIL_NOTIFICATIONS_ENABLED: "true"
+      EMAIL_FROM: testgen@local.dev
+      EMAIL_RECIPIENTS: team@local.dev
+      # ── Allure ──
+      ALLURE_REPORT_URL: http://localhost:8888
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - test-output:/tmp/generated-tests
+      - allure-reports:/tmp/generated-tests/allure-report
+    networks:
+      - testgen-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/v1/tests/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ─── PostgreSQL ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: testgen-postgres
+    environment:
+      POSTGRES_DB: testgen
+      POSTGRES_USER: testgen
+      POSTGRES_PASSWORD: testgen
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testgen"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - testgen-net
+    restart: unless-stopped
+
+  # ─── MailHog — Email önizleme ────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI → http://localhost:8025
+    networks:
+      - testgen-net
+    restart: unless-stopped
+
+  # ─── Allure Report Server (nginx) ────────────────────────────
+  allure-server:
+    image: nginx:1.25-alpine
+    container_name: allure-server
+    ports:
+      - "8888:80"
+    volumes:
+      - allure-reports:/usr/share/nginx/html:ro
+      - ./nginx/allure.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - testgen-net
+    restart: unless-stopped
+
+  # ─── Selenium Grid Hub ───────────────────────────────────────
+  selenium-hub:
+    image: selenium/hub:4.18.1
+    container_name: selenium-hub
+    ports:
+      - "4444:4444"
+      - "4442:4442"
+      - "4443:4443"
+    networks:
+      - testgen-net
+    restart: unless-stopped
+
+  # ─── Selenium Chrome Node ────────────────────────────────────
+  selenium-chrome:
+    image: selenium/node-chrome:4.18.1
+    container_name: selenium-chrome
+    shm_size: 2gb
+    environment:
+      SE_EVENT_BUS_HOST: selenium-hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+      SE_NODE_MAX_SESSIONS: 3
+    depends_on:
+      - selenium-hub
+    networks:
+      - testgen-net
+    restart: unless-stopped
+
+  # ─── PgAdmin (opsiyonel, --profile tools ile aç) ────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@testgen.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    profiles:
+      - tools
+    networks:
+      - testgen-net
+
+volumes:
+  postgres-data:
+  test-output:
+  allure-reports:
+
+networks:
+  testgen-net:
+    driver: bridge

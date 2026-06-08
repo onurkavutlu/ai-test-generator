@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="|AI Test Generator – ${summary.formattedDate}|">Rapor</title>
+  <style th:replace="~{email/layout :: style}"></style>
+  <!--/*  Inline stil – bazı email istemcileri external CSS desteklemez  */-->
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f0f4f8; font-family: -apple-system,'Segoe UI',Roboto,sans-serif; color: #1a202c; }
+    a { color: #4f46e5; text-decoration: none; }
+    .wrapper { max-width: 680px; margin: 32px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.10); }
+    .header { background: linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%); padding: 32px 40px; text-align: center; }
+    .header-logo { font-size: 26px; font-weight: 800; color: #fff; }
+    .header-logo span { color: #818cf8; }
+    .header-sub { color: #94a3b8; font-size: 13px; margin-top: 6px; }
+    .status-banner { padding: 20px 40px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid #e2e8f0; background: #f0fdf4; border-left: 5px solid #22c55e; }
+    .status-icon { font-size: 36px; }
+    .status-title { font-size: 18px; font-weight: 700; color: #166534; }
+    .status-sub { font-size: 13px; color: #64748b; margin-top: 2px; }
+    .content { padding: 32px 40px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin: 20px 0 28px; }
+    .stat-card { border-radius: 10px; padding: 16px 12px; text-align: center; border: 1px solid; }
+    .stat-total   { background: #f8fafc; border-color: #e2e8f0; }
+    .stat-passed  { background: #f0fdf4; border-color: #bbf7d0; }
+    .stat-failed  { background: #fff1f2; border-color: #fecaca; }
+    .stat-skipped { background: #fefce8; border-color: #fef08a; }
+    .stat-num { font-size: 28px; font-weight: 800; line-height: 1; }
+    .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-top: 4px; }
+    .stat-total  .stat-num { color: #334155; }
+    .stat-passed .stat-num { color: #16a34a; }
+    .stat-failed .stat-num { color: #dc2626; }
+    .stat-skipped .stat-num { color: #ca8a04; }
+    .progress-wrap { margin: 0 0 28px; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 13px; color: #475569; margin-bottom: 8px; }
+    .progress-bar { height: 10px; border-radius: 99px; background: #e2e8f0; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#22c55e,#16a34a); }
+    .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 28px; }
+    th { background: #f8fafc; text-align: left; padding: 10px 14px; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; }
+    tr:last-child td { border-bottom: none; }
+    .tc-name { font-weight: 600; color: #1e293b; }
+    .fw-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .fw-karate   { background: #ecfdf5; color: #059669; }
+    .fw-selenium { background: #fff7ed; color: #ea580c; }
+    .fw-appium   { background: #eff6ff; color: #2563eb; }
+    .badge-passed  { display:inline-flex; align-items:center; gap:4px; background:#f0fdf4; color:#16a34a; font-size:12px; font-weight:600; padding:3px 10px; border-radius:99px; }
+    .badge-failed  { display:inline-flex; align-items:center; gap:4px; background:#fff1f2; color:#dc2626; font-size:12px; font-weight:600; padding:3px 10px; border-radius:99px; }
+    .badge-other   { display:inline-flex; align-items:center; gap:4px; background:#f8fafc;  color:#94a3b8; font-size:12px; font-weight:600; padding:3px 10px; border-radius:99px; }
+    .tc-time { color: #94a3b8; font-size: 12px; font-family: monospace; }
+    .cta-wrap { text-align: center; margin: 28px 0; }
+    .cta-btn { display: inline-block; background: linear-gradient(135deg,#4f46e5,#7c3aed); color: #fff !important; padding: 14px 32px; border-radius: 10px; font-size: 14px; font-weight: 700; letter-spacing: 0.3px; }
+    .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 20px; font-size: 13px; color: #475569; margin-bottom: 20px; }
+    .info-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #e2e8f0; }
+    .info-row:last-child { border-bottom: none; }
+    .insight-list { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-bottom: 24px; }
+    .insight-item { font-size: 13px; color: #334155; line-height: 1.45; padding: 7px 0; border-bottom: 1px solid #e2e8f0; }
+    .insight-item:last-child { border-bottom: none; }
+    .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 40px; text-align: center; font-size: 12px; color: #94a3b8; }
+    .footer a { color: #6366f1; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-logo">🤖 AI Test<span>Generator</span></div>
+    <div class="header-sub">Otomatik Test Otomasyon Raporu</div>
+  </div>
+
+  <!-- STATUS BANNER: PASSED -->
+  <div class="status-banner">
+    <div class="status-icon">✅</div>
+    <div>
+      <div class="status-title">Tüm Testler Başarıyla Tamamlandı!</div>
+      <div class="status-sub"
+           th:text="|${summary.totalTests} test çalıştırıldı · ${summary.formattedDate}|">
+        0 test · tarih
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- Meta bilgi -->
+    <div class="info-box">
+      <div class="info-row">
+        <strong>Request ID</strong>
+        <span th:text="${summary.requestId}">–</span>
+      </div>
+      <div class="info-row">
+        <strong>Proje</strong>
+        <span th:text="${summary.projectName}">AI Test Generator</span>
+      </div>
+      <div class="info-row">
+        <strong>Rapor Tarihi</strong>
+        <span th:text="${summary.formattedDate}">–</span>
+      </div>
+      <div class="info-row">
+        <strong>Geçme Oranı</strong>
+        <span th:text="${summary.passRateFormatted}" style="font-weight:700;color:#16a34a">0%</span>
+      </div>
+    </div>
+
+    <div class="section-title">AI Agent Özeti</div>
+    <div class="insight-list">
+      <div class="insight-item" th:each="item : ${summary.agentHighlights}" th:text="${item}">
+        AI agent çalıştı.
+      </div>
+    </div>
+
+    <div class="section-title">Test Ekleme Özeti</div>
+    <div class="insight-list">
+      <div class="insight-item" th:each="item : ${summary.generationHighlights}" th:text="${item}">
+        LLM test case ekledi.
+      </div>
+    </div>
+
+    <div class="section-title">LLM / İyileştirme Özeti</div>
+    <div class="insight-list">
+      <div class="insight-item" th:each="item : ${summary.improvementHighlights}" th:text="${item}">
+        İyileştirme aksiyonu yok.
+      </div>
+    </div>
+
+    <!-- İstatistik kartları -->
+    <div class="stats-grid">
+      <div class="stat-card stat-total">
+        <div class="stat-num" th:text="${summary.totalTests}">0</div>
+        <div class="stat-label">Toplam</div>
+      </div>
+      <div class="stat-card stat-passed">
+        <div class="stat-num" th:text="${summary.passedTests}">0</div>
+        <div class="stat-label">Geçti ✓</div>
+      </div>
+      <div class="stat-card stat-failed">
+        <div class="stat-num" th:text="${summary.failedTests}">0</div>
+        <div class="stat-label">Başarısız</div>
+      </div>
+      <div class="stat-card stat-skipped">
+        <div class="stat-num" th:text="${summary.skippedTests}">0</div>
+        <div class="stat-label">Atlandı</div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span>Geçme Oranı</span>
+        <span th:text="${summary.passRateFormatted}">0%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" th:style="|width: ${summary.passRate}%|"></div>
+      </div>
+    </div>
+
+    <!-- Framework özeti tablosu -->
+    <div class="section-title">Framework Bazlı Özet</div>
+    <table>
+      <tr>
+        <th>Framework</th>
+        <th style="text-align:right">Toplam</th>
+        <th style="text-align:right">Geçti</th>
+        <th style="text-align:right">Başarısız</th>
+      </tr>
+      <tr th:each="entry : ${frameworkSummaries}">
+        <td>
+          <span class="fw-badge"
+                th:classappend="${'fw-' + #strings.toLowerCase(entry.key.name())}"
+                th:text="${entry.key.name()}">FW</span>
+        </td>
+        <td style="text-align:right;font-weight:600" th:text="${entry.value.total}">0</td>
+        <td style="text-align:right;color:#16a34a;font-weight:600" th:text="${entry.value.passed}">0</td>
+        <td style="text-align:right;color:#dc2626;font-weight:600" th:text="${entry.value.failed}">0</td>
+      </tr>
+    </table>
+
+    <!-- Test case detay tablosu -->
+    <div class="section-title">Test Case Detayları</div>
+    <table>
+      <tr>
+        <th>Test Adı</th>
+        <th>Framework</th>
+        <th>Durum</th>
+        <th>Süre</th>
+      </tr>
+      <tr th:each="tc : ${testCases}">
+        <td class="tc-name" th:text="${tc.testName}">–</td>
+        <td>
+          <span class="fw-badge"
+                th:classappend="${'fw-' + #strings.toLowerCase(tc.framework.name())}"
+                th:text="${tc.framework.name()}">FW</span>
+        </td>
+        <td>
+          <span th:if="${tc.runStatus.name() == 'PASSED'}"    class="badge-passed">✓ Geçti</span>
+          <span th:if="${tc.runStatus.name() == 'FAILED'}"    class="badge-failed">✗ Başarısız</span>
+          <span th:if="${tc.runStatus.name() != 'PASSED' and tc.runStatus.name() != 'FAILED'}"
+                class="badge-other" th:text="${tc.runStatus.name()}">–</span>
+        </td>
+        <td class="tc-time"
+            th:text="${tc.executionTimeMs != null ? tc.executionTimeMs + 'ms' : '–'}">–</td>
+      </tr>
+    </table>
+
+    <!-- Allure rapor CTA -->
+    <div th:if="${summary.allureReportUrl != null}" class="cta-wrap">
+      <a th:href="${summary.allureReportUrl}" class="cta-btn">
+        📊 Allure Raporunu Görüntüle
+      </a>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <p>Bu email <strong>AI Test Generator</strong> tarafından otomatik olarak üretilmiştir.</p>
+    <p style="margin-top:6px">
+      <a th:href="${summary.allureReportUrl}">Allure Raporu</a>
+      &nbsp;·&nbsp;
+      <a href="#">Bildirimleri Kapat</a>
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
