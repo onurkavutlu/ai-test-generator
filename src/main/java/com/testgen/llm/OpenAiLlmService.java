@@ -63,8 +63,7 @@ public class OpenAiLlmService implements LlmService {
         try {
             var response = chatModel.generate(
                     SystemMessage.from(SYSTEM_PROMPT),
-                    UserMessage.from(prompt)
-            );
+                    UserMessage.from(prompt));
             return response.content().text();
         } catch (Exception e) {
             log.warn("OpenAI API çağrısı başarısız oldu: {}. Mock jeneratör devreye giriyor...", e.getMessage());
@@ -84,6 +83,7 @@ public class OpenAiLlmService implements LlmService {
 
     @Override
     public String generateAppiumTest(String appPackage, String userStory, String platform, String additionalContext) {
-        return generateTestCase(PromptTemplates.buildAppiumPrompt(appPackage, userStory, platform, additionalContext), "APPIUM");
+        return generateTestCase(PromptTemplates.buildAppiumPrompt(appPackage, userStory, platform, additionalContext),
+                "APPIUM");
     }
 }

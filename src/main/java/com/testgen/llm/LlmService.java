@@ -12,8 +12,8 @@ public interface LlmService {
     /**
      * Verilen bağlama göre test case üretir.
      *
-     * @param prompt  LLM'e gönderilecek tam prompt
-     * @return        LLM'in ürettiği raw metin (feature/java kodu)
+     * @param prompt LLM'e gönderilecek tam prompt
+     * @return LLM'in ürettiği raw metin (feature/java kodu)
      */
     String generateTestCase(String prompt);
 

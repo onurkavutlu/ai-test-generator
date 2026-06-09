@@ -49,6 +49,34 @@ public class GeneratedTestCase {
 
     private LocalDateTime lastRunAt;
 
+    // ── ISTQB Metadata ────────────────────────────────────────
+    /** Test kategorisi: SMOKE, REGRESSION, SECURITY, PERFORMANCE vb. */
+    @Enumerated(EnumType.STRING)
+    private TestCategory testCategory;
+
+    /** Test seviyesi: UNIT, INTEGRATION, SYSTEM, ACCEPTANCE */
+    @Enumerated(EnumType.STRING)
+    private TestLevel testLevel;
+
+    /** Test önceliği: P0_BLOCKER → P3_MINOR */
+    @Enumerated(EnumType.STRING)
+    private TestPriority testPriority;
+
+    /** Kullanılan ISTQB test tasarım tekniği */
+    @Enumerated(EnumType.STRING)
+    private TestDesignTechnique testDesignTechnique;
+
+    /** Test ön koşulları (preconditions) */
+    @Column(columnDefinition = "TEXT")
+    private String preconditions;
+
+    /** Beklenen sonuçlar */
+    @Column(columnDefinition = "TEXT")
+    private String expectedResults;
+
+    /** İzlenebilirlik referansı: User Story ID, Requirement ID vb. */
+    private String traceabilityRef;
+
     // ── Self-Healing meta ────────────────────────────────────
     /** Kaç kez self-heal denemesi yapıldı (orijinal case için). */
     @Builder.Default

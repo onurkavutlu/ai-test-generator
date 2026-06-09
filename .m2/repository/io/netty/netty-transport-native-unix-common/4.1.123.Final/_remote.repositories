@@ -1,0 +1,8 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Tue Jun 09 08:54:44 GMT 2026
+netty-transport-native-unix-common-4.1.123.Final.pom>central=
+netty-transport-native-unix-common-4.1.123.Final-osx-x86_64.jar>central=
+netty-transport-native-unix-common-4.1.123.Final-linux-aarch_64.jar>central=
+netty-transport-native-unix-common-4.1.123.Final-linux-x86_64.jar>central=
+netty-transport-native-unix-common-4.1.123.Final-osx-aarch_64.jar>central=
+netty-transport-native-unix-common-4.1.123.Final.jar>central=

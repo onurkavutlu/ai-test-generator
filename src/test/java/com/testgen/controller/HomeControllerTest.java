@@ -23,9 +23,9 @@ public class HomeControllerTest {
     private MockMvc mockMvc;
 
     @Test
-    public void testRootRedirectsToSwaggerUi() throws Exception {
+    public void testRootRendersDashboard() throws Exception {
         mockMvc.perform(get("/"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/swagger-ui/index.html"));
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.view().name("dashboard"));
     }
 }

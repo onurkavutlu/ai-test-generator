@@ -2,6 +2,7 @@ package com.testgen.scheduler;
 
 import com.testgen.llm.LlmService;
 import com.testgen.model.*;
+import com.testgen.repository.GeneratedTestCaseRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,6 +21,9 @@ public class FailureAnalysisServiceTest {
     @Mock
     private LlmService llmService;
 
+    @Mock
+    private GeneratedTestCaseRepository testCaseRepository;
+
     @InjectMocks
     private FailureAnalysisService failureAnalysisService;
 
@@ -32,6 +36,8 @@ public class FailureAnalysisServiceTest {
 
     @Test
     public void testAnalyzeAndGenerateNewKarate() {
+        org.springframework.test.util.ReflectionTestUtils.setField(failureAnalysisService, "maxHealAttempts", 3);
+
         TestGenerationRequest request = TestGenerationRequest.builder()
                 .id("req-123")
                 .testType(TestType.BACKEND_API)
@@ -46,10 +52,11 @@ public class FailureAnalysisServiceTest {
                 .runOutput("Assertion failed: id == 10 but was null")
                 .framework(TestFramework.KARATE)
                 .request(request)
+                .healAttempts(2)
                 .build();
 
         String mockLlmResponse = "```\nFeature: Get pet by id fixed\n```";
-        when(llmService.generateTestCase(anyString())).thenReturn(mockLlmResponse);
+        when(llmService.generateTestCase(anyString(), anyString())).thenReturn(mockLlmResponse);
 
         List<GeneratedTestCase> result = failureAnalysisService.analyzeAndGenerateNew(List.of(failedCase), request);
 
@@ -62,8 +69,8 @@ public class FailureAnalysisServiceTest {
         assertEquals("Feature: Get pet by id fixed", fixedCase.getTestContent().trim());
         assertEquals(TestFramework.KARATE, fixedCase.getFramework());
         assertEquals(TestRunStatus.NOT_RUN, fixedCase.getRunStatus());
-        assertTrue(fixedCase.getTestSummary().contains("[AUTO-FIX] GetPetByIdTest"));
+        assertTrue(fixedCase.getTestSummary().contains("[AUTO-FIX]") && fixedCase.getTestSummary().contains("GetPetByIdTest"));
 
-        verify(llmService, times(1)).generateTestCase(anyString());
+        verify(llmService, times(1)).generateTestCase(anyString(), anyString());
     }
 }

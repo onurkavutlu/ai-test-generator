@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Test Generator - Dashboard</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-base: #060913;
+      --bg-surface: #0b1120;
+      --bg-card: #111a2e;
+      --bg-input: #090e1a;
+      --border-color: rgba(255, 255, 255, 0.08);
+      
+      --color-primary: #6366f1;
+      --color-primary-hover: #4f46e5;
+      --color-primary-glow: rgba(99, 102, 241, 0.15);
+      --color-accent: #a855f7;
+      --color-accent-glow: rgba(168, 85, 247, 0.15);
+      
+      --color-success: #10b981;
+      --color-success-glow: rgba(16, 185, 129, 0.15);
+      --color-danger: #ef4444;
+      --color-danger-glow: rgba(239, 68, 68, 0.15);
+      --color-warning: #f59e0b;
+      --color-warning-glow: rgba(245, 158, 11, 0.15);
+      --color-info: #3b82f6;
+      
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      
+      --shadow-premium: 0 12px 40px -10px rgba(0, 0, 0, 0.6);
+      --transition-base: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      line-height: 1.5;
+      overflow-x: hidden;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Webkit Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-base);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-card);
+      border-radius: 99px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--color-primary);
+    }
+
+    /* App Container Layout */
+    .sidebar {
+      width: 280px;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .main-content {
+      flex-grow: 1;
+      padding: 32px;
+      height: 100vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* Sidebar Logo */
+    .logo-area {
+      padding: 32px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .logo-icon {
+      font-size: 28px;
+    }
+
+    .logo-text {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 20px;
+      background: linear-gradient(135deg, #fff 0%, var(--color-accent) 50%, var(--color-primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    /* Sidebar Navigation Links */
+    .nav-links {
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-grow: 1;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-md);
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: var(--transition-base);
+    }
+
+    .nav-link:hover {
+      color: var(--text-main);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .nav-link.active {
+      color: #fff;
+      background: var(--color-primary-glow);
+      border-color: rgba(99, 102, 241, 0.3);
+      box-shadow: 0 4px 20px -5px var(--color-primary-glow);
+    }
+
+    .sidebar-footer {
+      padding: 24px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .health-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-success);
+      box-shadow: 0 0 8px var(--color-success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* Header View Styles */
+    .view-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .view-title-section h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #fff, var(--text-muted));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .view-title-section p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: var(--transition-base);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+      color: #fff;
+      box-shadow: 0 4px 20px var(--color-primary-glow);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    /* Overview Stats Cards Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+    }
+
+    .stat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-premium);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 80px;
+      height: 80px;
+      background: radial-gradient(circle, var(--color-primary-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .stat-value {
+      font-family: 'Outfit', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .stat-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Views Sections toggles */
+    .view-section {
+      display: none;
+      animation: viewFadeIn 0.4s ease-out forwards;
+    }
+
+    .view-section.active {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    @keyframes viewFadeIn {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Request Cards List Table */
+    .table-container {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-premium);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    td {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr {
+      transition: var(--transition-base);
+    }
+
+    tr:hover {
+      background: rgba(255,255,255,0.01);
+    }
+
+    .req-id-link {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      color: #fff;
+      text-decoration: none;
+      transition: var(--transition-base);
+      cursor: pointer;
+    }
+
+    .req-id-link:hover {
+      color: var(--color-primary);
+      text-decoration: underline;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      border: 1px solid transparent;
+    }
+
+    .badge-primary { background: var(--color-primary-glow); color: #818cf8; border-color: rgba(99, 102, 241, 0.3); }
+    .badge-accent { background: var(--color-accent-glow); color: #c084fc; border-color: rgba(168, 85, 247, 0.3); }
+    .badge-success { background: var(--color-success-glow); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
+    .badge-warning { background: var(--color-warning-glow); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
+    .badge-danger { background: var(--color-danger-glow); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
+
+    /* Forms */
+    .form-container {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      box-shadow: var(--shadow-premium);
+      max-width: 800px;
+      width: 100%;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .form-group label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .form-control {
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: var(--transition-base);
+      width: 100%;
+    }
+
+    .form-control:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-glow);
+    }
+
+    .form-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 16px;
+      padding-right: 48px;
+    }
+
+    /* Modal / Details Split View */
+    .detail-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(6, 9, 19, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+    }
+
+    .detail-overlay.active {
+      display: flex;
+      opacity: 1;
+    }
+
+    .detail-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 1300px;
+      height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-premium);
+      animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    @keyframes scaleUp {
+      from { transform: scale(0.95) translateY(10px); }
+      to { transform: scale(1) translateY(0); }
+    }
+
+    .detail-header {
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .detail-title h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .btn-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 4px;
+      transition: var(--transition-base);
+    }
+    .btn-close:hover {
+      color: var(--text-main);
+      transform: rotate(90deg);
+    }
+
+    .detail-body {
+      flex-grow: 1;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+    }
+
+    .detail-sidebar {
+      border-right: 1px solid var(--border-color);
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .detail-content {
+      padding: 32px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* List of Generated Test Files inside Details */
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.01);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: var(--transition-base);
+    }
+
+    .file-item:hover {
+      background: rgba(255,255,255,0.03);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    .file-item.active {
+      background: var(--color-primary-glow);
+      border-color: var(--color-primary);
+    }
+
+    .file-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Split View Code Viewer */
+    .code-viewer-grid {
+      display: grid;
+      grid-template-columns: 35% 1fr;
+      gap: 24px;
+    }
+
+    .code-meta-card {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .code-meta-section {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 16px;
+    }
+
+    .code-meta-section h4 {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .code-meta-section p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .code-container {
+      background: #070a13;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .code-container-header {
+      background: rgba(255,255,255,0.03);
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .code-content-pre {
+      padding: 16px;
+      overflow: auto;
+      max-height: 480px;
+      margin: 0;
+    }
+
+    .code-content-pre code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+    }
+
+    /* diagnostics grid */
+    .diagnostic-calls-list {
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+    }
+
+    /* Notification Alert Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 16px 24px;
+      box-shadow: var(--shadow-premium);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 100;
+      transform: translateY(150%);
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .toast.active {
+      transform: translateY(0);
+    }
+    .toast-icon {
+      font-size: 20px;
+    }
+    .toast-message {
+      font-size: 14px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SIDEBAR NAVIGATION -->
+  <div class="sidebar">
+    <div class="logo-area">
+      <span class="logo-icon">🤖</span>
+      <span class="logo-text">AI Test Gen</span>
+    </div>
+    
+    <div class="nav-links">
+      <div class="nav-link active" onclick="switchView('requests')" id="nav-requests">
+        <span>📋</span> Test İstekleri
+      </div>
+      <div class="nav-link" onclick="switchView('create')" id="nav-create">
+        <span>⚡</span> Yeni Test Üretimi
+      </div>
+      <div class="nav-link" onclick="switchView('stats')" id="nav-stats">
+        <span>📈</span> LLM İstatistikleri
+      </div>
+      <div class="nav-link" onclick="switchView('ai-reports')" id="nav-ai-reports">
+        <span>🧠</span> AI Analiz & Raporlar
+      </div>
+    </div>
+    
+    <div class="sidebar-footer">
+      <div class="health-indicator">
+        <span class="dot"></span> Sistem Aktif
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTAINER -->
+  <div class="main-content">
+
+    <!-- VIEW 1: REQUESTS LIST -->
+    <div class="view-section active" id="view-requests">
+      <div class="view-header">
+        <div class="view-title-section">
+          <h2>Test Üretim İstekleri</h2>
+          <p>Yapay zeka modelleri tarafından oluşturulan Karate, Selenium ve Appium test paketleri</p>
+        </div>
+        <button class="btn btn-primary" onclick="switchView('create')">
+          <span>+</span> Yeni İstek Oluştur
+        </button>
+      </div>
+
+      <!-- Quick Summary Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-label">Toplam İstek</span>
+          <span class="stat-value" id="stats-total">-</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Başarıyla Üretilen</span>
+          <span class="stat-value" id="stats-generated" style="color: var(--color-success);">-</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Koşulan Testler</span>
+          <span class="stat-value" id="stats-ran">-</span>
+        </div>
+      </div>
+
+      <!-- Table of Requests -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Request ID</th>
+              <th>Test Tipi</th>
+              <th>Framework</th>
+              <th>Hedef Uç Nokta / URL</th>
+              <th>Oluşturulma Durumu</th>
+              <th>Koşum İstatistikleri</th>
+              <th>İşlemler</th>
+            </tr>
+          </thead>
+          <tbody id="requests-table-body">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 32px;">
+                İstekler yükleniyor...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VIEW 2: CREATE TEST REQUEST FORM -->
+    <div class="view-section" id="view-create">
+      <div class="view-header">
+        <div class="view-title-section">
+          <h2>Yeni Test Üretimi Başlat</h2>
+          <p>Proje detaylarını girin; 8-Agent pipeline devreye girerek testlerinizi üretsin</p>
+        </div>
+      </div>
+
+      <div class="form-container">
+        <form id="create-request-form" onsubmit="handleCreateRequest(event)">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <div class="form-group">
+              <label for="testType">Test Tipi</label>
+              <select class="form-control form-select" id="testType" required onchange="adaptFrameworkOptions()">
+                <option value="BACKEND_API">BACKEND_API (Rest/SOAP)</option>
+                <option value="FRONTEND_WEB">FRONTEND_WEB (Browser)</option>
+                <option value="MOBILE">MOBILE (Android/iOS)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="framework">Framework</label>
+              <select class="form-control form-select" id="framework" required>
+                <option value="KARATE">KARATE DSL</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" id="group-swagger">
+            <label for="swaggerUrl">Swagger / OpenAPI Şema URL</label>
+            <input class="form-control" type="url" id="swaggerUrl" placeholder="https://example.com/api/openapi.json">
+          </div>
+
+          <div class="form-group" id="group-appUrl" style="display: none;">
+            <label for="applicationUrl">Uygulama Adresi (URL)</label>
+            <input class="form-control" type="url" id="applicationUrl" placeholder="https://example.com">
+          </div>
+
+          <div class="form-group" id="group-appPackage" style="display: none;">
+            <label for="appPackage">Mobil Paket Adı (App Package)</label>
+            <input class="form-control" type="text" id="appPackage" placeholder="com.example.android.app">
+          </div>
+
+          <div class="form-group">
+            <label for="userStory">Kullanıcı Hikayesi (User Story) / Test Amacı</label>
+            <textarea class="form-control" id="userStory" rows="3" placeholder="Örn: Kullanıcı sisteme geçerli kullanıcı adı ve şifreyle login olabilmelidir." required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="additionalContext">Ek Bağlam (Opsiyonel)</label>
+            <textarea class="form-control" id="additionalContext" rows="2" placeholder="Örn: Port 404 testlerini de dahil et, test verisinde 'auth' parametresini kullan."></textarea>
+          </div>
+
+          <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px;">
+            <input type="checkbox" id="autoRun" checked style="width: 18px; height: 18px; cursor: pointer;">
+            <label for="autoRun" style="cursor: pointer; user-select: none;">Üretim tamamlandığında tüm testleri otomatik olarak koştur</label>
+          </div>
+
+          <div style="display: flex; gap: 16px; margin-top: 12px;">
+            <button class="btn btn-primary" type="submit" id="btn-submit-generate">
+              <span>🚀</span> Test Üretimini Başlat
+            </button>
+            <button class="btn btn-secondary" type="button" onclick="switchView('requests')">
+              İptal Et
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- VIEW 3: LLM DIAGNOSTICS STATS -->
+    <div class="view-section" id="view-stats">
+      <div class="view-header">
+        <div class="view-title-section">
+          <h2>LLM Çağrı İstatistikleri</h2>
+          <p>Yapay zeka model çağrı geçmişi, harcanan süreler ve tahmini token verileri</p>
+        </div>
+      </div>
+
+      <!-- LLM Diagnostic Summary Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-label">Toplam Çağrı</span>
+          <span class="stat-value" id="stats-llm-total">-</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Başarılı / Başarısız</span>
+          <span class="stat-value" id="stats-llm-success-fail" style="font-size: 24px; margin-top: 8px;">-</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Ortalama Süre</span>
+          <span class="stat-value" id="stats-llm-avg-duration">-</span>
+        </div>
+      </div>
+
+      <div class="view-title-section" style="margin-top: 16px;">
+        <h3>Son LLM Çağrı Geçmişi</h3>
+      </div>
+
+      <!-- LLM Call List Table -->
+      <div class="table-container">
+        <table style="font-size: 13px;">
+          <thead>
+            <tr>
+              <th>Zaman</th>
+              <th>Tip</th>
+              <th>Durum</th>
+              <th>Süre (ms)</th>
+              <th>Prompt (Karakter)</th>
+              <th>Özet</th>
+            </tr>
+          </thead>
+          <tbody id="llm-calls-table-body">
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 32px;">
+                Yükleniyor...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VIEW 4: AI REPORTS & AGENT OUTPUTS -->
+    <div class="view-section" id="view-ai-reports">
+      <div class="view-header">
+        <div class="view-title-section">
+          <h2>AI Raporları & Agent Çıktıları</h2>
+          <p>Çoklu AI Agent'ların (Requirement, Design, Code, Healer) analizleri ve üretilen test kodları</p>
+        </div>
+      </div>
+
+      <!-- Request Selection Dropdown -->
+      <div class="form-container" style="max-width: 100%; display: flex; gap: 16px; align-items: center; padding: 20px;">
+        <div style="flex-grow: 1;">
+          <label for="reportRequestSelect" style="font-size: 13px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; display: block;">Rapor Seçin:</label>
+          <select class="form-control form-select" id="reportRequestSelect" onchange="loadSelectedReport()">
+            <option value="">-- Bir test isteği seçin --</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary" onclick="loadRequestsForDropdown()" style="margin-top: 22px;">
+          <span>🔄</span> Yenile
+        </button>
+      </div>
+
+      <!-- Report Content (Initially Hidden) -->
+      <div id="report-content-area" style="display: none; flex-direction: column; gap: 28px;">
+        <!-- Overview info -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-label">Kullanıcı Hikayesi (User Story)</span>
+            <span class="stat-meta" id="rep-user-story" style="font-size: 14px; font-weight: 500; color: #fff; line-height: 1.5; margin-top: 8px;">-</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Test Tipi / Framework</span>
+            <span class="stat-value" id="rep-type-fw" style="font-size: 20px; margin-top: 8px;">-</span>
+            <span class="stat-meta" id="rep-created-date">-</span>
+          </div>
+        </div>
+
+        <!-- Agent Analyses Grid -->
+        <div>
+          <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 16px; background: linear-gradient(to right, #fff, var(--color-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">🤖 Çoklu AI Agent Analizleri</h3>
+          <div class="stats-grid" id="agent-analyses-container" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+        <!-- Generated Test Cases Workspace -->
+        <div>
+          <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 16px; background: linear-gradient(to right, #fff, var(--color-primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">💾 Üretilen Test Case'ler & Kodlar</h3>
+          <div class="code-viewer-grid" style="grid-template-columns: 320px 1fr; border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; background: var(--bg-surface); padding: 20px;">
+            <!-- Left panel: Cases List -->
+            <div style="display: flex; flex-direction: column; gap: 12px; border-right: 1px solid var(--border-color); padding-right: 20px; max-height: 550px; overflow-y: auto;">
+              <div style="font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.5px; margin-bottom: 4px;">Test Case Listesi</div>
+              <div id="rep-cases-list" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Populated via JS -->
+              </div>
+            </div>
+
+            <!-- Right panel: Code Viewer and Run Controls -->
+            <div id="rep-code-viewer-panel" style="padding-left: 20px; display: flex; flex-direction: column; gap: 20px;">
+              <div style="color: var(--text-dim); text-align: center; margin-top: 150px;">
+                Kodları ve çalıştırma araçlarını görmek için soldan bir test case seçin.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- INTERACTIVE DETAILS MODAL OVERLAY -->
+  <div class="detail-overlay" id="detail-modal">
+    <div class="detail-card">
+      <div class="detail-header">
+        <div class="detail-title">
+          <h3 id="modal-req-title">Request Details</h3>
+          <p id="modal-req-subtitle" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Detail info</p>
+        </div>
+        <button class="btn-close" onclick="closeDetailsModal()">&times;</button>
+      </div>
+      
+      <div class="detail-body">
+        <!-- Sidebar: File List & Run controls -->
+        <div class="detail-sidebar">
+          <div style="font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.5px; margin-bottom: 8px;">
+            Dosya Listesi
+          </div>
+          <div id="modal-files-list" style="display: flex; flex-direction: column; gap: 8px; flex-grow: 1; overflow-y: auto;">
+            <!-- Files loaded via JS -->
+          </div>
+          
+          <div style="border-top: 1px solid var(--border-color); padding-top: 16px; display: flex; flex-direction: column; gap: 10px;">
+            <button class="btn btn-primary" style="width: 100%; justify-content: center;" id="modal-btn-run-all" onclick="runAllTests()">
+              <span>▶</span> Tümünü Çalıştır
+            </button>
+            <button class="btn btn-secondary" style="width: 100%; justify-content: center;" id="modal-btn-heal" onclick="runSelfHealing()">
+              <span>🔧</span> Self-Healing Tetikle
+            </button>
+            <a id="modal-btn-allure" href="#" target="_blank" class="btn btn-secondary" style="width: 100%; justify-content: center; text-decoration: none; font-size: 13px;">
+              📊 Allure Raporu
+            </a>
+          </div>
+        </div>
+        
+        <!-- Content: Active test details & Code viewer -->
+        <div class="detail-content" id="modal-main-content">
+          <!-- Populated via JS selection -->
+          <div style="color: var(--text-dim); text-align: center; margin-top: 100px;">
+            Görüntülemek için sol menüden bir test dosyası seçin.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div class="toast" id="toast">
+    <span class="toast-icon" id="toast-icon">✓</span>
+    <span class="toast-message" id="toast-msg">Başarılı!</span>
+  </div>
+
+  <!-- CORE DASHBOARD LOGIC (AJAX) -->
+  <script>
+    let currentView = 'requests';
+    let requestsData = [];
+    let activeRequestId = null;
+    let activeCaseId = null;
+    let detailCases = [];
+
+    // On Page Load
+    window.addEventListener('DOMContentLoaded', () => {
+      loadRequests();
+      loadLlmSummary();
+      setInterval(loadRequests, 10000); // Auto refresh table state
+    });
+
+    // View Routing
+    function switchView(viewName) {
+      document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
+      document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+      
+      document.getElementById('view-' + viewName).classList.add('active');
+      document.getElementById('nav-' + viewName).classList.add('active');
+      
+      currentView = viewName;
+      if (viewName === 'requests') {
+        loadRequests();
+      } else if (viewName === 'stats') {
+        loadLlmSummary();
+        loadLlmCalls();
+      } else if (viewName === 'ai-reports') {
+        loadRequestsForDropdown();
+      }
+    }
+
+    // Dynamic frameworks dropdown adaptions
+    function adaptFrameworkOptions() {
+      const testType = document.getElementById('testType').value;
+      const frameworkSelect = document.getElementById('framework');
+      
+      const swaggerGroup = document.getElementById('group-swagger');
+      const appUrlGroup = document.getElementById('group-appUrl');
+      const appPackageGroup = document.getElementById('group-appPackage');
+      
+      frameworkSelect.innerHTML = '';
+      
+      if (testType === 'BACKEND_API') {
+        frameworkSelect.innerHTML = '<option value="KARATE">KARATE DSL</option>';
+        swaggerGroup.style.display = 'flex';
+        appUrlGroup.style.display = 'none';
+        appPackageGroup.style.display = 'none';
+      } else if (testType === 'FRONTEND_WEB') {
+        frameworkSelect.innerHTML = '<option value="SELENIUM">SELENIUM (WebDriver)</option>';
+        swaggerGroup.style.display = 'none';
+        appUrlGroup.style.display = 'flex';
+        appPackageGroup.style.display = 'none';
+      } else if (testType === 'MOBILE') {
+        frameworkSelect.innerHTML = '<option value="APPIUM">APPIUM (Mobile)</option>';
+        swaggerGroup.style.display = 'none';
+        appUrlGroup.style.display = 'none';
+        appPackageGroup.style.display = 'flex';
+      }
+    }
+
+    // Load test requests from API
+    function loadRequests() {
+      fetch('/api/v1/tests')
+        .then(res => res.json())
+        .then(data => {
+          requestsData = data;
+          populateRequestsTable(data);
+          updateSummaryCards(data);
+        })
+        .catch(err => console.error("Test istekleri yüklenemedi:", err));
+    }
+
+    function populateRequestsTable(requests) {
+      const tbody = document.getElementById('requests-table-body');
+      if (requests.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 32px;">Kayıtlı test isteği bulunamadı.</td></tr>`;
+        return;
+      }
+      
+      tbody.innerHTML = '';
+      // Reverse requests list to show newest on top
+      const sorted = [...requests].reverse();
+      
+      sorted.forEach(req => {
+        let statusBadge = '';
+        if (req.status === 'PENDING') statusBadge = '<span class="badge badge-warning">Hazırlanıyor</span>';
+        else if (req.status === 'GENERATING') statusBadge = '<span class="badge badge-primary">Üretiliyor...</span>';
+        else if (req.status === 'GENERATED') statusBadge = '<span class="badge badge-success">Üretildi</span>';
+        else if (req.status === 'FAILED') statusBadge = '<span class="badge badge-danger">Hata Oluştu</span>';
+
+        const endpointText = req.swaggerUrl || req.applicationUrl || req.appPackage || '-';
+        const formattedDate = new Date(req.createdAt).toLocaleString('tr-TR');
+        
+        let actionButtons = `
+          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="openDetailsModal('${req.id}')">
+            Detay / Kod
+          </button>
+        `;
+        if (req.status === 'GENERATED') {
+          actionButtons += `
+            <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="runAllTestsFromTable('${req.id}', event)">
+              ▶ Çalıştır
+            </button>
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px; border-color: rgba(168, 85, 247, 0.4);" onclick="runSelfHealingFromTable('${req.id}', event)">
+              🔧 İyileştir
+            </button>
+          `;
+        }
+        
+        tbody.innerHTML += `
+          <tr>
+            <td>
+              <span class="req-id-link" onclick="openDetailsModal('${req.id}')">${req.id}</span>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">${formattedDate}</div>
+            </td>
+            <td><span class="badge badge-accent">${req.testType}</span></td>
+            <td><span class="badge badge-primary">${req.framework}</span></td>
+            <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${endpointText}">
+              ${endpointText}
+            </td>
+            <td>${statusBadge}</td>
+            <td id="run-stats-${req.id}">Yükleniyor...</td>
+            <td>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                ${actionButtons}
+              </div>
+            </td>
+          </tr>
+        `;
+        
+        // Fetch request test cases stats asynchronously
+        fetch(`/api/v1/tests/${req.id}/cases`)
+          .then(res => res.json())
+          .then(cases => {
+            const container = document.getElementById(`run-stats-${req.id}`);
+            if (cases.length === 0) {
+              container.innerHTML = `<span style="color: var(--text-dim);">Test case yok</span>`;
+              return;
+            }
+            const passed = cases.filter(c => c.runStatus === 'PASSED').length;
+            const failed = cases.filter(c => c.runStatus === 'FAILED').length;
+            const notRun = cases.filter(c => c.runStatus === 'NOT_RUN').length;
+            
+            container.innerHTML = `
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <span class="badge badge-success" title="Passed">${passed}</span>
+                <span class="badge badge-danger" title="Failed">${failed}</span>
+                ${notRun > 0 ? `<span class="badge badge-primary" title="Not Run">${notRun}</span>` : ''}
+              </div>
+            `;
+          }).catch(() => {
+            document.getElementById(`run-stats-${req.id}`).innerText = '-';
+          });
+      });
+    }
+
+    function updateSummaryCards(requests) {
+      document.getElementById('stats-total').innerText = requests.length;
+      document.getElementById('stats-generated').innerText = requests.filter(r => r.status === 'GENERATED').length;
+      
+      let totalRan = 0;
+      requests.forEach(r => {
+        totalRan += (r.scheduledRunCount || 0);
+      });
+      document.getElementById('stats-ran').innerText = totalRan;
+    }
+
+    // Handle form submit for test generation
+    function handleCreateRequest(event) {
+      event.preventDefault();
+      
+      const btn = document.getElementById('btn-submit-generate');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span>⚙️</span> Analiz Ediliyor ve Üretiliyor...';
+
+      const autoRun = document.getElementById('autoRun').checked;
+      
+      const payload = {
+        testType: document.getElementById('testType').value,
+        framework: document.getElementById('framework').value,
+        userStory: document.getElementById('userStory').value,
+        swaggerUrl: document.getElementById('swaggerUrl').value || null,
+        applicationUrl: document.getElementById('applicationUrl').value || null,
+        appPackage: document.getElementById('appPackage').value || null,
+        additionalContext: document.getElementById('additionalContext').value || null
+      };
+
+      fetch(`/api/v1/tests/generate?autoRun=${autoRun}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        showToast("Test üretimi başlatıldı! İstek ID: " + data.requestId, true);
+        document.getElementById('create-request-form').reset();
+        switchView('requests');
+      })
+      .catch(err => {
+        console.error(err);
+        showToast("Hata oluştu! Lütfen girdileri kontrol edin.", false);
+      })
+      .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      });
+    }
+
+    // Load diagnostics stats
+    function loadLlmSummary() {
+      fetch('/api/v1/llm/summary')
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('stats-llm-total').innerText = data.totalCalls || 0;
+          document.getElementById('stats-llm-success-fail').innerHTML = `
+            <span style="color: var(--color-success);">${data.successCalls || 0}</span> / 
+            <span style="color: var(--color-danger);">${data.failedCalls || 0}</span>
+          `;
+          document.getElementById('stats-llm-avg-duration').innerText = (data.avgDurationMs ? Math.round(data.avgDurationMs) : 0) + ' ms';
+        })
+        .catch(err => console.error("LLM özet rapor alınamadı:", err));
+    }
+
+    function loadLlmCalls() {
+      fetch('/api/v1/llm/calls')
+        .then(res => res.json())
+        .then(data => {
+          const tbody = document.getElementById('llm-calls-table-body');
+          if (data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 32px;">Model çağrı geçmişi bulunamadı.</td></tr>`;
+            return;
+          }
+          tbody.innerHTML = '';
+          const sorted = [...data].reverse().slice(0, 15); // Show last 15 calls
+          sorted.forEach(c => {
+            const statusBadge = c.success
+              ? '<span class="badge badge-success">Başarılı</span>'
+              : '<span class="badge badge-danger">Hata</span>';
+            const date = new Date(c.calledAt).toLocaleTimeString('tr-TR');
+            tbody.innerHTML += `
+              <tr>
+                <td>${date}</td>
+                <td><span class="badge badge-primary">${c.callType}</span></td>
+                <td>${statusBadge}</td>
+                <td>${c.durationMs} ms</td>
+                <td>${c.promptChars}</td>
+                <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${c.promptSummary || ''}">
+                  ${c.promptSummary || '-'}
+                </td>
+              </tr>
+            `;
+          });
+        })
+        .catch(err => console.error("LLM çağrı detayları yüklenemedi:", err));
+    }
+
+    // Modal Details Panel Controllers
+    function openDetailsModal(requestId) {
+      activeRequestId = requestId;
+      const modal = document.getElementById('detail-modal');
+      const req = requestsData.find(r => r.id === requestId) || {};
+      
+      document.getElementById('modal-req-title').innerText = "Test İstek Detayı: " + requestId;
+      
+      const formattedDate = new Date(req.createdAt).toLocaleString('tr-TR');
+      document.getElementById('modal-req-subtitle').innerText = `${req.testType} · ${req.framework} · ${formattedDate}`;
+      
+      document.getElementById('modal-main-content').innerHTML = `
+        <div style="color: var(--text-dim); text-align: center; margin-top: 100px;">
+          Görüntülemek için sol menüden bir test dosyası seçin.
+        </div>
+      `;
+
+      // Set allure report dynamically
+      document.getElementById('modal-btn-allure').href = `/tests/${requestId}/llm-report`;
+      document.getElementById('modal-btn-allure').innerText = "📊 Üretim Analiz Raporu";
+
+      modal.classList.add('active');
+      loadRequestCases(requestId);
+    }
+
+    function closeDetailsModal() {
+      document.getElementById('detail-modal').classList.remove('active');
+      activeRequestId = null;
+      activeCaseId = null;
+      detailCases = [];
+      loadRequests(); // Refresh table stats
+    }
+
+    function loadRequestCases(requestId) {
+      fetch(`/api/v1/tests/${requestId}/cases`)
+        .then(res => res.json())
+        .then(data => {
+          detailCases = data;
+          const container = document.getElementById('modal-files-list');
+          if (data.length === 0) {
+            container.innerHTML = `<div style="color: var(--text-dim); text-align: center; padding: 12px; font-size: 12px;">Üretilmiş dosya yok.</div>`;
+            return;
+          }
+          container.innerHTML = '';
+          data.forEach(c => {
+            let runStatusIcon = '○';
+            let iconColor = 'var(--text-dim)';
+            if (c.runStatus === 'PASSED') { runStatusIcon = '✓'; iconColor = 'var(--color-success)'; }
+            else if (c.runStatus === 'FAILED') { runStatusIcon = '✗'; iconColor = 'var(--color-danger)'; }
+            
+            container.innerHTML += `
+              <div class="file-item ${activeCaseId === c.id ? 'active' : ''}" id="file-item-${c.id}" onclick="selectFile('${c.id}')">
+                <span class="file-name" title="${c.fileName}">${c.fileName}</span>
+                <span style="color: ${iconColor}; font-weight: 700; font-size: 13px;">${runStatusIcon}</span>
+              </div>
+            `;
+          });
+        });
+    }
+
+    function selectFile(caseId) {
+      activeCaseId = caseId;
+      document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+      document.getElementById(`file-item-${caseId}`).classList.add('active');
+      
+      const tc = detailCases.find(c => c.id === caseId);
+      if (!tc) return;
+      
+      let statusBadge = '';
+      if (tc.runStatus === 'PASSED') statusBadge = '<span class="badge badge-success">Geçti</span>';
+      else if (tc.runStatus === 'FAILED') statusBadge = '<span class="badge badge-danger">Başarısız</span>';
+      else if (tc.runStatus === 'NOT_RUN') statusBadge = '<span class="badge badge-primary">Çalıştırılmadı</span>';
+
+      const contentSection = document.getElementById('modal-main-content');
+      
+      contentSection.innerHTML = `
+        <div class="code-viewer-grid">
+          <!-- Left sidebar of code view -->
+          <div class="code-meta-card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <h3 style="font-family:'Outfit', sans-serif; font-size: 18px; font-weight: 700;">${tc.testName}</h3>
+            </div>
+            
+            <div class="code-meta-section">
+              <h4>Test Durumu</h4>
+              <div style="margin-top: 8px; display:flex; align-items:center; gap: 10px;">
+                ${statusBadge}
+                ${tc.executionTimeMs ? `<span style="font-size: 12px; color: var(--text-dim);">${tc.executionTimeMs} ms</span>` : ''}
+              </div>
+            </div>
+
+            <div class="code-meta-section">
+              <h4>Test Özeti</h4>
+              <p style="margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--text-muted);">
+                ${tc.testSummary || 'Özet bilgisi yok.'}
+              </p>
+            </div>
+
+            ${tc.runOutput ? `
+              <div class="code-meta-section" style="border-color: rgba(239, 68, 68, 0.2);">
+                <h4 style="color: var(--color-danger);">Koşum Hata Logu</h4>
+                <pre style="margin-top: 8px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: var(--radius-sm); font-size: 11px; color:#f87171; white-space:pre-wrap; max-height: 180px; overflow-y:auto;">${tc.runOutput}</pre>
+              </div>
+            ` : ''}
+
+            <div style="display:flex; gap: 8px;">
+              <button class="btn btn-primary" style="flex-grow:1; justify-content:center; padding: 8px 12px; font-size: 13px;" onclick="runSingleTest('${tc.id}')">
+                ⚡ Bu Testi Çalıştır
+              </button>
+            </div>
+          </div>
+
+          <!-- Right side code editor -->
+          <div class="code-container">
+            <div class="code-container-header">
+              <span style="font-family:'Outfit',sans-serif; font-size:11px; font-weight:700; color:var(--text-dim); text-transform:uppercase;">
+                KOD GÖRÜNTÜLEYİCİ
+              </span>
+              <button class="btn-copy" onclick="copyCode()">
+                📋 Kopyala
+              </button>
+            </div>
+            <pre class="code-content-pre"><code id="active-code-block">${escapeHtml(tc.testContent)}</code></pre>
+          </div>
+        </div>
+      `;
+    }
+
+    // Helper functions
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function copyCode() {
+      const code = document.getElementById('active-code-block').innerText;
+      navigator.clipboard.writeText(code)
+        .then(() => showToast("Kod panoya kopyalandı!", true))
+        .catch(() => showToast("Kopyalama başarısız.", false));
+    }
+
+    // Action execution
+    function runSingleTest(caseId) {
+      showToast("Test koşumu başlatıldı...", true);
+      fetch(`/api/v1/tests/cases/${caseId}/run`, { method: 'POST' })
+        .then(res => res.json())
+        .then(() => {
+          showToast("Koşum tamamlandı, durumu güncelleniyor.", true);
+          loadRequestCases(activeRequestId);
+          setTimeout(() => {
+            if (activeCaseId === caseId) selectFile(caseId);
+          }, 1000);
+        })
+        .catch(() => showToast("Test çalıştırılamadı.", false));
+    }
+
+    function runAllTests() {
+      if (!activeRequestId) return;
+      showToast("Tüm testlerin koşumu başlatıldı...", true);
+      fetch(`/api/v1/tests/${activeRequestId}/run-all`, { method: 'POST' })
+        .then(res => {
+          showToast("Koşum başarıyla tetiklendi, MailHog ve Allure güncelleniyor.", true);
+          setTimeout(() => loadRequestCases(activeRequestId), 2000);
+        })
+        .catch(() => showToast("Koşum başlatılamadı.", false));
+    }
+
+    function runSelfHealing() {
+      if (!activeRequestId) return;
+      showToast("Self-Healing tetikleniyor. Başarısız testler analiz edilecek...", true);
+      
+      const btn = document.getElementById('modal-btn-heal');
+      btn.disabled = true;
+      btn.innerText = '🔧 İyileştiriliyor...';
+
+      fetch(`/api/v1/scheduler/${activeRequestId}/trigger-now`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          showToast(`Self-healing tamamlandı! ${data.newGenerated || 0} yeni test üretildi.`, true);
+          loadRequestCases(activeRequestId);
+        })
+        .catch(() => showToast("Self-healing başarısız.", false))
+        .finally(() => {
+          btn.disabled = false;
+          btn.innerText = '🔧 Self-Healing Tetikle';
+        });
+    }
+
+    // AI Reports and Table Action Handlers
+    let selectedReportCases = [];
+    let selectedReportId = null;
+    let selectedReportCaseId = null;
+
+    function loadRequestsForDropdown() {
+      const select = document.getElementById('reportRequestSelect');
+      const prevVal = select.value;
+      select.innerHTML = '<option value="">-- Bir test isteği seçin --</option>';
+      
+      const generated = requestsData.filter(r => r.status === 'GENERATED');
+      if (generated.length === 0) {
+        select.innerHTML = '<option value="">(Başarıyla üretilmiş istek bulunamadı)</option>';
+        return;
+      }
+      
+      generated.forEach(r => {
+        const dateStr = new Date(r.createdAt).toLocaleString('tr-TR');
+        const endpoint = r.swaggerUrl || r.applicationUrl || r.appPackage || '';
+        const displayLabel = `${r.id} (${r.testType} - ${r.framework}) - ${dateStr} - [${endpoint}]`;
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.innerText = displayLabel;
+        if (r.id === prevVal) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function loadSelectedReport() {
+      const select = document.getElementById('reportRequestSelect');
+      const requestId = select.value;
+      const contentArea = document.getElementById('report-content-area');
+      
+      if (!requestId) {
+        contentArea.style.display = 'none';
+        selectedReportId = null;
+        selectedReportCases = [];
+        return;
+      }
+      
+      selectedReportId = requestId;
+      
+      fetch(`/api/v1/tests/${requestId}/llm-report`)
+        .then(res => res.json())
+        .then(data => {
+          contentArea.style.display = 'flex';
+          
+          document.getElementById('rep-user-story').innerText = data.userStory || 'Belirtilmemiş.';
+          
+          document.getElementById('rep-type-fw').innerHTML = `
+            <span class="badge badge-accent">${data.testType}</span>
+            <span class="badge badge-primary">${data.framework}</span>
+          `;
+          document.getElementById('rep-created-date').innerText = new Date(data.createdAt).toLocaleString('tr-TR') + ' tarihinde oluşturuldu.';
+          
+          const analysesContainer = document.getElementById('agent-analyses-container');
+          analysesContainer.innerHTML = '';
+          if (data.agentAnalyses && data.agentAnalyses.length > 0) {
+            data.agentAnalyses.forEach(analysis => {
+              let cleanAnalysis = analysis.analysis
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                
+              analysesContainer.innerHTML += `
+                <div class="stat-card" style="min-height: 180px; justify-content: flex-start; gap: 12px; background: rgba(255,255,255,0.02); border-color: rgba(168, 85, 247, 0.2);">
+                  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                    <span class="stat-label" style="color: var(--color-accent); font-size: 12px;">${analysis.title}</span>
+                    <span class="badge badge-primary" style="font-size: 9px; padding: 2px 6px;">Active</span>
+                  </div>
+                  <div style="font-size: 13px; color: var(--text-muted); max-height: 250px; overflow-y: auto; line-height: 1.6;">
+                    ${cleanAnalysis}
+                  </div>
+                </div>
+              `;
+            });
+          } else {
+            analysesContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-dim); padding: 24px;">Bu istek için agent analiz kaydı bulunmuyor.</div>`;
+          }
+          
+          selectedReportCases = data.testCases || [];
+          const casesListContainer = document.getElementById('rep-cases-list');
+          casesListContainer.innerHTML = '';
+          
+          if (selectedReportCases.length === 0) {
+            casesListContainer.innerHTML = `<div style="color: var(--text-dim); font-size: 12px; text-align: center;">Kod bulunamadı.</div>`;
+            document.getElementById('rep-code-viewer-panel').innerHTML = `
+              <div style="color: var(--text-dim); text-align: center; margin-top: 150px;">
+                Kodları ve çalıştırma araçlarını görmek için soldan bir test case seçin.
+              </div>
+            `;
+            return;
+          }
+          
+          selectedReportCases.forEach(tc => {
+            let runStatusIcon = '○';
+            let iconColor = 'var(--text-dim)';
+            if (tc.runStatus === 'PASSED') { runStatusIcon = '✓'; iconColor = 'var(--color-success)'; }
+            else if (tc.runStatus === 'FAILED') { runStatusIcon = '✗'; iconColor = 'var(--color-danger)'; }
+            
+            casesListContainer.innerHTML += `
+              <div class="file-item" id="rep-file-item-${tc.id}" onclick="selectReportFile('${tc.id}')">
+                <span class="file-name" title="${tc.fileName}">${tc.fileName}</span>
+                <span style="color: ${iconColor}; font-weight: 700; font-size: 13px;">${runStatusIcon}</span>
+              </div>
+            `;
+          });
+          
+          if (selectedReportCases.length > 0) {
+            selectReportFile(selectedReportCases[0].id);
+          }
+        })
+        .catch(err => {
+          console.error("Rapor yüklenemedi:", err);
+          showToast("Rapor detayları alınamadı.", false);
+        });
+    }
+
+    function selectReportFile(caseId) {
+      selectedReportCaseId = caseId;
+      document.querySelectorAll('#rep-cases-list .file-item').forEach(el => el.classList.remove('active'));
+      
+      const fileItem = document.getElementById(`rep-file-item-${caseId}`);
+      if (fileItem) fileItem.classList.add('active');
+      
+      const tc = selectedReportCases.find(c => c.id === caseId);
+      if (!tc) return;
+      
+      let statusBadge = '';
+      if (tc.runStatus === 'PASSED') statusBadge = '<span class="badge badge-success">Geçti</span>';
+      else if (tc.runStatus === 'FAILED') statusBadge = '<span class="badge badge-danger">Başarısız</span>';
+      else if (tc.runStatus === 'NOT_RUN') statusBadge = '<span class="badge badge-primary">Çalıştırılmadı</span>';
+
+      const panel = document.getElementById('rep-code-viewer-panel');
+      panel.innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap: 16px; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md);">
+            <div>
+              <h4 style="font-family:'Outfit', sans-serif; font-size:16px; font-weight:700;">${tc.testName}</h4>
+              <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">${tc.testSummary || 'Açıklama bulunmuyor.'}</p>
+            </div>
+            
+            <div style="display:flex; align-items:center; gap: 12px;">
+              ${statusBadge}
+              ${tc.executionTimeMs ? `<span style="font-size: 12px; color: var(--text-dim); font-weight: 600;">${tc.executionTimeMs} ms</span>` : ''}
+              <button class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;" onclick="runSingleTestFromReport('${tc.id}')">
+                ⚡ Testi Çalıştır
+              </button>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="code-meta-section">
+              <h4>Üretim ve İyileştirme Detayı</h4>
+              <p style="font-size: 12px; line-height: 1.5; color: var(--text-muted); margin-top: 6px;">
+                <strong>Gerekçe:</strong> ${tc.generationNarrative || 'Detay girilmemiş.'}<br>
+                ${tc.improvementNarrative ? `<strong style="color: var(--color-accent);">İyileştirme:</strong> ${tc.improvementNarrative}` : ''}
+              </p>
+            </div>
+            
+            <div class="code-meta-section" style="${tc.runOutput ? 'border-color: rgba(239, 68, 68, 0.2);' : ''}">
+              <h4>Konsol Log Çıktısı</h4>
+              <pre style="margin-top: 6px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: var(--radius-sm); font-size: 11px; color:${tc.runStatus === 'FAILED' ? '#f87171' : 'var(--text-muted)'}; white-space:pre-wrap; max-height: 90px; overflow-y:auto;">${tc.runOutput || 'Koşum günlüğü veya hata bulunmuyor.'}</pre>
+            </div>
+          </div>
+
+          <div class="code-container">
+            <div class="code-container-header">
+              <span style="font-family:'Outfit',sans-serif; font-size:11px; font-weight:700; color:var(--text-dim); text-transform:uppercase;">
+                KOD GÖRÜNTÜLEYİCİ · ${tc.fileName}
+              </span>
+              <button class="btn-copy" onclick="copyReportCode()">
+                📋 Kopyala
+              </button>
+            </div>
+            <pre class="code-content-pre" style="max-height: 350px;"><code id="rep-active-code-block">${escapeHtml(tc.testContent)}</code></pre>
+          </div>
+        </div>
+      `;
+    }
+
+    function copyReportCode() {
+      const code = document.getElementById('rep-active-code-block').innerText;
+      navigator.clipboard.writeText(code)
+        .then(() => showToast("Kod panoya kopyalandı!", true))
+        .catch(() => showToast("Kopyalama başarısız.", false));
+    }
+
+    function runSingleTestFromReport(caseId) {
+      showToast("Test koşumu başlatıldı...", true);
+      fetch(`/api/v1/tests/cases/${caseId}/run`, { method: 'POST' })
+        .then(res => res.json())
+        .then(() => {
+          showToast("Koşum tamamlandı! Durum güncelleniyor...", true);
+          if (selectedReportId) {
+            loadSelectedReport();
+          }
+        })
+        .catch(() => showToast("Test çalıştırılamadı.", false));
+    }
+
+    function runAllTestsFromTable(requestId, event) {
+      if (event) event.stopPropagation();
+      showToast("Tüm testlerin koşumu başlatıldı...", true);
+      fetch(`/api/v1/tests/${requestId}/run-all`, { method: 'POST' })
+        .then(res => {
+          showToast("Koşum başarıyla tetiklendi.", true);
+          setTimeout(loadRequests, 2000);
+        })
+        .catch(() => showToast("Koşum başlatılamadı.", false));
+    }
+
+    function runSelfHealingFromTable(requestId, event) {
+      if (event) event.stopPropagation();
+      showToast("Self-Healing tetikleniyor...", true);
+      fetch(`/api/v1/scheduler/${requestId}/trigger-now`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          showToast(`Self-healing tamamlandı! ${data.newGenerated || 0} yeni test üretildi.`, true);
+          loadRequests();
+        })
+        .catch(() => showToast("Self-healing başarısız.", false));
+    }
+
+    // Toast alert popups
+    function showToast(message, isSuccess) {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toast-icon');
+      const msg = document.getElementById('toast-msg');
+      
+      icon.innerText = isSuccess ? '✓' : '✗';
+      toast.style.borderColor = isSuccess ? 'var(--color-success)' : 'var(--color-danger)';
+      icon.style.color = isSuccess ? 'var(--color-success)' : 'var(--color-danger)';
+      
+      msg.innerText = message;
+      toast.classList.add('active');
+      
+      setTimeout(() => {
+        toast.classList.remove('active');
+      }, 4000);
+    }
+  </script>
+</body>
+</html>
