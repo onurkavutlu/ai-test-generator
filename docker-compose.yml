@@ -26,7 +26,8 @@ services:
       # ── LLM: Ollama (OpenAI key gerekmez) ──
       LLM_PROVIDER: ollama
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      OLLAMA_MODEL: qwen2.5-coder:1.5b
+      OLLAMA_MODEL: gemma4:31b-cloud
+      OLLAMA_TIMEOUT_SECONDS: "900"
       # ── OpenAI (kullanılmıyor ama boş geçmemeli) ──
       OPENAI_API_KEY: not-needed
       # ── Database ──

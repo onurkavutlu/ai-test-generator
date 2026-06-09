@@ -52,7 +52,8 @@ public class OllamaLlmService implements LlmService {
                 .modelName(model)
                 .temperature(temperature)
                 .timeout(Duration.ofSeconds(timeoutSeconds))
-                .numPredict(4096)
+                .numPredict(2048)   // yanıt uzunluğu (token)
+                .numCtx(8192)       // context window — 7B için
                 .build();
 
         log.info("Ollama LLM Service başlatıldı — model: {}, url: {}", model, baseUrl);
