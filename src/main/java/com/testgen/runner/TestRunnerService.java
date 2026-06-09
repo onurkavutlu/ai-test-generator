@@ -7,6 +7,7 @@ import com.testgen.model.TestRunStatus;
 import com.testgen.report.ReportOrchestrator;
 import com.testgen.repository.GeneratedTestCaseRepository;
 import com.testgen.repository.TestGenerationRequestRepository;
+import com.testgen.scheduler.FailureAnalysisService;
 import com.testgen.service.MockDataGenerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class TestRunnerService {
     private final ReportOrchestrator              reportOrchestrator;
     private final GeneratedJavaTestProjectService javaTestProjectService;
     private final MockDataGenerationService        mockDataGenerationService;
+    private final FailureAnalysisService          failureAnalysisService;
 
     @Value("${test-generator.runner.timeout-seconds}")
     private int timeoutSeconds;
@@ -104,6 +106,42 @@ public class TestRunnerService {
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
         List<GeneratedTestCase> updated = testCaseRepository.findByRequestId(requestId);
+
+        if (request.isAutoGenerateOnFailure()) {
+            List<GeneratedTestCase> failedCases = updated.stream()
+                    .filter(tc -> tc.getRunStatus() == TestRunStatus.FAILED)
+                    .toList();
+
+            if (!failedCases.isEmpty()) {
+                log.info("Manuel koşum sonrası {} başarısız test bulundu. Self-healing tetikleniyor...", failedCases.size());
+                List<GeneratedTestCase> newCases = failureAnalysisService.analyzeAndGenerateNew(failedCases, request);
+
+                if (!newCases.isEmpty()) {
+                    newCases.forEach(tc -> tc.setRequest(request));
+                    testCaseRepository.saveAll(newCases);
+                    log.info("{} yeni self-heal test üretildi. Koşuluyor...", newCases.size());
+
+                    List<CompletableFuture<Void>> healFutures = newCases.stream().map(tc ->
+                            CompletableFuture.runAsync(() -> {
+                                prepareKarateMock(tc);
+                                tc.setRunStatus(TestRunStatus.RUNNING);
+                                testCaseRepository.save(tc);
+
+                                TestRunResult result = runSingle(tc);
+                                applyResult(tc, result);
+                                testCaseRepository.save(tc);
+                                log.info("  🔧 SELF-HEAL {} — {} ({}/{})",
+                                        tc.getTestName(), tc.getRunStatus(),
+                                        tc.getPassedScenarios(), tc.getTotalScenarios());
+                            })
+                    ).toList();
+
+                    CompletableFuture.allOf(healFutures.toArray(new CompletableFuture[0])).join();
+                    updated = testCaseRepository.findByRequestId(requestId);
+                }
+            }
+        }
+
         reportOrchestrator.generateAndSend(request, updated, emailRecipients);
         return CompletableFuture.completedFuture(null);
     }

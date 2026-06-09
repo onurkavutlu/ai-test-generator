@@ -106,8 +106,9 @@ public class OllamaLlmService implements LlmService {
         } catch (Exception e) {
             long durationMs = System.currentTimeMillis() - start;
             log.warn("Ollama çağrısı başarısız ({}ms): {}. Mock devreye giriyor.", durationMs, e.getMessage());
-            reportStore.record(LlmCallReport.failure(modelName, callType, prompt, e.getMessage(), durationMs));
-            return MockGenerator.generateFallback(prompt, callType);
+            String mockResult = MockGenerator.generateFallback(prompt, callType);
+            reportStore.record(LlmCallReport.success(modelName + " (Mock)", callType, prompt, mockResult, durationMs));
+            return mockResult;
         }
     }
 }

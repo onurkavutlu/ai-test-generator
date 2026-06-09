@@ -695,6 +695,9 @@
       <div class="nav-link" onclick="switchView('ai-reports')" id="nav-ai-reports">
         <span>🧠</span> AI Analiz & Raporlar
       </div>
+      <div class="nav-link" onclick="switchView('system-logs')" id="nav-system-logs">
+        <span>📝</span> Sistem Logları
+      </div>
     </div>
     
     <div class="sidebar-footer">
@@ -951,6 +954,25 @@
       </div>
     </div>
 
+    <!-- VIEW 5: SYSTEM LOGS -->
+    <div class="view-section" id="view-system-logs">
+      <div class="view-header">
+        <div class="view-title-section">
+          <h2>Sistem Logları</h2>
+          <p>Uygulama arka plan işlemleri, hata raporları ve sistem olayları</p>
+        </div>
+        <button class="btn btn-secondary" onclick="fetchSystemLogs()">
+          <span>🔄</span> Logları Yenile
+        </button>
+      </div>
+      <div class="code-container" style="flex-grow: 1; height: 600px;">
+        <div class="code-container-header">
+          <span style="font-size: 13px; font-weight: 600; color: #e2e8f0;">application.log</span>
+        </div>
+        <pre class="code-content-pre" style="max-height: 100%; height: 100%;"><code id="system-logs-content">Loglar yükleniyor...</code></pre>
+      </div>
+    </div>
+
   </div>
 
   <!-- INTERACTIVE DETAILS MODAL OVERLAY -->
@@ -1035,6 +1057,24 @@
         loadLlmCalls();
       } else if (viewName === 'ai-reports') {
         loadRequestsForDropdown();
+      } else if (viewName === 'system-logs') {
+        fetchSystemLogs();
+      }
+    }
+
+    // Fetch System Logs
+    async function fetchSystemLogs() {
+      try {
+        const response = await fetch('/api/v1/logs');
+        if (!response.ok) throw new Error('Logs fetch error');
+        const lines = await response.json();
+        const codeElement = document.getElementById('system-logs-content');
+        codeElement.textContent = lines.join('\n');
+        // Scroll to bottom
+        const preElement = codeElement.parentElement;
+        preElement.scrollTop = preElement.scrollHeight;
+      } catch (err) {
+        showToast('Loglar alınamadı: ' + err.message, 'error');
       }
     }
 

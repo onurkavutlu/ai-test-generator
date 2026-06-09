@@ -96,6 +96,8 @@ management:
       enabled: true
 
 logging:
+  file:
+    name: logs/application.log
   level:
     com.testgen: DEBUG
     org.springframework: INFO
