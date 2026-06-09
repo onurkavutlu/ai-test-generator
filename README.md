@@ -1,143 +1,68 @@
 # 🤖 AI Test Generator
 
-**LLM destekli otomatik test case üreticisi**  
-Karate DSL · Selenium · Appium · Allure · Self-Healing · Docker
+**Büyük Dil Modelleri (LLM) ve Multi-Agent (Çoklu Ajan) mimarisi kullanan otonom yazılım test üretim laboratuvarı.**  
+Karate DSL · Selenium · Appium · ISTQB Standartları · Self-Healing · Dark Dashboard
 
-> Ollama ile tamamen yerel veya `gemma4:31b-cloud` ile bulut tabanlı çalışır. OpenAI key gerekmez.
+---
+
+## 🚀 Projenin Amacı ve Temel Yetenekleri
+
+Bu proje, geleneksel manuel test yazımını otomatize etmekle kalmaz; yazılım geliştirme yaşam döngüsündeki farklı rolleri (İş Analisti, Test Mühendisi, Güvenlik Uzmanı vb.) simüle eden **8 farklı yapay zeka ajanı** kullanarak uçtan uca, uluslararası **ISTQB standartlarında** testler üretir.
+
+### 🌟 Öne Çıkan Özellikler
+
+1. **Multi-Agent Mimari (8 Ajanlı Yapı):** 
+   Sistem, tek bir prompt yerine birbirini besleyen ajanlardan oluşur (Product Manager, Developer, AI LLM Test Analyst, Test Automation, Performance, DevOps, SecOps, Report).
+2. **ISTQB Standartları Entegrasyonu:** 
+   Oluşturulan testler basit "Happy Path" testleri değildir. Sistem Sınır Değer Analizi (BVA), Denklik Sınıfları (EP) ve Hata Tahminleme (Error Guessing) gibi mühendislik yaklaşımlarını kullanarak negatif ve uç durum senaryoları tasarlar.
+3. **Anlık Oto-Onarım (Self-Healing):** 
+   API kontratlarındaki değişiklikler veya anlık hatalar nedeniyle bir test patladığında (`FAILED`), sistem durmaz. Hata logunu (stacktrace) okuyarak LLM'e geri gönderir, hatayı tespit edip kodu otomatik düzeltir ve (`_Fixed_v1` olarak) tekrar çalıştırır.
+4. **Karanlık (Dark Glassmorphism) Dashboard:** 
+   Sistemi komut satırından kullanmak yerine modern bir arayüzden yönetebilirsiniz. Swagger URL ve User Story girerek anında test tetikleyebilir, ajanların analiz detaylarını rapor sekmesinden inceleyebilirsiniz.
 
 ---
 
 ## ⚡ Hızlı Başlangıç
 
-```bash
-# 1. Kurulum (Docker + Ollama gerekli)
-chmod +x setup.sh && ./setup.sh
-
-# 2. Tam demo akışı
-chmod +x demo-full-flow.sh && ./demo-full-flow.sh
-```
-
----
-
-## 🌐 Servisler
-
-| Servis | URL | Açıklama |
-|--------|-----|----------|
-| **API** | http://localhost:8080 | REST API |
-| **Swagger UI** | http://localhost:8080/swagger-ui.html | API dokümantasyonu |
-| **MailHog** | http://localhost:8025 | Email önizleme |
-| **Allure** | http://localhost:8888 | Test raporları |
-| **Selenium Grid** | http://localhost:4444 | Browser grid |
-| **LLM Raporu** | http://localhost:8080/api/v1/llm/summary | LLM istatistikleri |
-
----
-
-## 📡 API
-
-### Test Üretimi
-```bash
-curl -X POST http://localhost:8080/api/v1/tests/generate \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "testType": "BACKEND_API",
-    "framework": "KARATE",
-    "swaggerUrl": "https://petstore3.swagger.io/api/v3/openapi.json",
-    "additionalContext": "PetStore CRUD ve hata senaryoları"
-  }'
-```
-
-| Endpoint | Açıklama |
-|----------|----------|
-| `POST /api/v1/tests/generate` | Test üret |
-| `GET /api/v1/tests/{id}` | Durum sorgula |
-| `GET /api/v1/tests/{id}/cases` | Üretilen testleri listele |
-| `POST /api/v1/tests/{id}/run-all` | Tümünü çalıştır + rapor + email |
-| `POST /api/v1/scheduler/{id}/trigger-now` | Self-healing tetikle |
-| `GET /api/v1/llm/calls` | LLM çağrı geçmişi |
-| `GET /api/v1/llm/summary` | LLM özet istatistikleri |
-
----
-
-## 🤖 LLM Modeli
-
-Varsayılan: **`gemma4:31b-cloud`** — Google Gemma 4, 256K context, bulut tabanlı.
+### Gereksinimler
+- Java 17+
+- Maven
+- (İsteğe Bağlı) Docker & Ollama (Yerel LLM kullanımı için)
 
 ```bash
-# Model çek
-ollama pull gemma4:31b-cloud
-
-# Farklı model kullanmak için .env dosyasında:
-OLLAMA_MODEL=gemma4:31b-cloud
+# Projeyi derleme ve çalıştırma
+./mvnw clean install -DskipTests
+./mvnw spring-boot:run -Dspring.profiles.active=local
 ```
 
-### OpenAI'ya geçiş
-```
-LLM_PROVIDER=openai
-OPENAI_API_KEY=<your-key>
-```
+### Uygulama Arayüzüne Erişim
+Sistem ayağa kalktıktan sonra tarayıcınızdan aşağıdaki linke giderek sistemi kullanmaya başlayabilirsiniz:
+**👉 http://localhost:8080**
 
 ---
 
-## 🔄 Self-Healing Akışı
+## 📡 API ve Entegrasyonlar
 
-```
-Test FAILED
-    ↓
-FailureAnalysisService (LLM analiz)
-    ↓
-_Fixed_vN case üretilir
-    ↓
-Başarısız case "superseded" olarak işaretlenir
-    ↓
-Max 3 deneme (max-heal-attempts: 3)
-```
+Arayüz (Dashboard) arkasında çalışan güçlü REST API sayesinde sistemi kendi CI/CD pipeline'larınıza da entegre edebilirsiniz:
+
+| Endpoint | HTTP | Açıklama |
+|----------|------|----------|
+| `/api/v1/tests/generate` | POST | Yeni bir test üretim isteği başlatır |
+| `/api/v1/tests/{id}/run-all` | POST | Üretilen testleri derler ve koşar |
+| `/api/v1/tests/{id}/llm-report`| GET | Her bir ajanın çıkardığı detaylı analizleri döndürür |
 
 ---
 
-## 📊 Test Akışı
+## 🔄 Self-Healing Akışı Nasıl Çalışır?
 
-```
-POST /generate
-    ↓
-8-Agent AI Pipeline
-(ProductManager → Developer → Analyst → TestAutomation → ...)
-    ↓
-Generator (Karate / Selenium / Appium)
-    ↓
-TestRunnerService (parallel)
-    ↓
-ReportOrchestrator
-  ├── Allure Report → localhost:8888
-  └── Email → MailHog localhost:8025
-```
+Kullanıcı arayüzünden veya Zamanlayıcıdan (Scheduler) tetiklenen testler, koşum sonrası `TestRunnerService` tarafından kontrol edilir. 
+Eğer başarısız (FAILED) bir test bulunursa:
+1. `FailureAnalysisService` hatayı analiz eder.
+2. Orijinal kod ve hata çıktısı (stacktrace) bir araya getirilerek düzeltilmiş test senaryosu üretilir.
+3. Yeni senaryo anında koşulur ve sonuçları nihai rapora eklenir.
 
 ---
 
-## 📁 Proje Yapısı
+## 💻 Geliştirme Ortamı
 
-```
-ai-test-generator/
-├── src/main/java/com/testgen/
-│   ├── agent/          8-agent AI pipeline
-│   ├── controller/     REST API
-│   ├── llm/            OllamaLlmService + LlmReportStore
-│   ├── generator/      Karate / Selenium / Appium üreticiler
-│   ├── runner/         TestRunnerService (parallel)
-│   ├── scheduler/      DailySchedulerService + FailureAnalysisService
-│   ├── report/         AllureReportService + ReportOrchestrator
-│   └── notification/   EmailNotificationService
-├── docker-compose.yml
-├── Dockerfile
-├── setup.sh
-├── demo-full-flow.sh
-└── .env.example
-```
-
----
-
-## 💻 IntelliJ ile Yerel Çalıştırma (H2, Docker'sız)
-
-1. Projeyi aç → `pom.xml` otomatik algılanır
-2. Run Configuration: `AiTestGeneratorApplication` → `-Dspring.profiles.active=local`
-3. H2 in-memory DB, seed verisi otomatik yüklenir
-4. Ollama kurulu ise LLM entegrasyonu aktif olur
+Spring Boot altyapısıyla geliştirilen projede, varsayılan olarak in-memory (H2) veritabanı kullanılır. Herhangi bir ekstra veritabanı kurulumuna ihtiyaç duymadan `local` profiliyle hemen çalıştırıp test edebilirsiniz.
