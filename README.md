@@ -1,15 +1,15 @@
-# 🤖 AI Test Generator
+# AI Test Generator
 
 **Büyük Dil Modelleri (LLM) ve Multi-Agent (Çoklu Ajan) mimarisi kullanan otonom yazılım test üretim laboratuvarı.**  
 Karate DSL · Selenium · Appium · ISTQB Standartları · Self-Healing · Dark Dashboard
 
 ---
 
-## 🚀 Projenin Amacı ve Temel Yetenekleri
+## Projenin Amacı ve Temel Yetenekleri
 
 Bu proje, geleneksel manuel test yazımını otomatize etmekle kalmaz; yazılım geliştirme yaşam döngüsündeki farklı rolleri (İş Analisti, Test Mühendisi, Güvenlik Uzmanı vb.) simüle eden **8 farklı yapay zeka ajanı** kullanarak uçtan uca, uluslararası **ISTQB standartlarında** testler üretir.
 
-### 🌟 Öne Çıkan Özellikler
+### Öne Çıkan Özellikler
 
 1. **Multi-Agent Mimari (8 Ajanlı Yapı):** 
    Sistem, tek bir prompt yerine birbirini besleyen 8 farklı uzman yapay zeka ajanından oluşur.
@@ -20,7 +20,7 @@ Bu proje, geleneksel manuel test yazımını otomatize etmekle kalmaz; yazılım
 4. **Karanlık (Dark Glassmorphism) Dashboard:** 
    Sistemi komut satırından kullanmak yerine modern bir arayüzden yönetebilirsiniz. Swagger URL ve User Story girerek anında test tetikleyebilir, ajanların analiz detaylarını rapor sekmesinden inceleyebilirsiniz.
 
-### 🤖 Multi-Agent Mimarisi (Ajan Rolleri)
+### Multi-Agent Mimarisi (Ajan Rolleri)
 
 Sistemdeki 8 farklı LLM ajanı, yazılım döngüsünü taklit ederek sıralı bir şekilde çalışır:
 * **Product Manager:** Gereksinimleri analiz edip iş risklerini ve kabul kriterlerini çıkarır.
@@ -34,13 +34,13 @@ Sistemdeki 8 farklı LLM ajanı, yazılım döngüsünü taklit ederek sıralı 
 
 ---
 
-## 🧠 Kullanılan LLM Modeli
+## Kullanılan LLM Modeli
 
 Projede varsayılan olarak **`gemma4:31b-cloud`** modeli kullanılmaktadır. Google'ın güçlü Gemma 4 serisinden olan bu model, 256K geniş bağlam (context window) kapasitesi sayesinde karmaşık Swagger dosyalarını ve çoklu ajan iletişimlerini tek seferde eksiksiz analiz edebilir. Altyapı istenirse Ollama üzerinden farklı yerel modellere de kolayca adapte edilebilecek şekilde geliştirilmiştir.
 
 ---
 
-## ⚡ Hızlı Başlangıç
+## Hızlı Başlangıç
 
 ### Gereksinimler
 - Java 17+
@@ -55,11 +55,11 @@ Projede varsayılan olarak **`gemma4:31b-cloud`** modeli kullanılmaktadır. Goo
 
 ### Uygulama Arayüzüne Erişim
 Sistem ayağa kalktıktan sonra tarayıcınızdan aşağıdaki linke giderek sistemi kullanmaya başlayabilirsiniz:
-**👉 http://localhost:8080**
+**Erişim Adresi:** http://localhost:8080
 
 ---
 
-## 📡 API ve Entegrasyonlar
+## API ve Entegrasyonlar
 
 Arayüz (Dashboard) arkasında çalışan güçlü REST API sayesinde sistemi kendi CI/CD pipeline'larınıza da entegre edebilirsiniz:
 
@@ -71,7 +71,7 @@ Arayüz (Dashboard) arkasında çalışan güçlü REST API sayesinde sistemi ke
 
 ---
 
-## 🔄 Self-Healing Akışı Nasıl Çalışır?
+## Self-Healing Akışı Nasıl Çalışır?
 
 Kullanıcı arayüzünden veya Zamanlayıcıdan (Scheduler) tetiklenen testler, koşum sonrası `TestRunnerService` tarafından kontrol edilir. 
 Eğer başarısız (FAILED) bir test bulunursa:
@@ -81,6 +81,6 @@ Eğer başarısız (FAILED) bir test bulunursa:
 
 ---
 
-## 💻 Geliştirme Ortamı
+## Geliştirme Ortamı
 
 Spring Boot altyapısıyla geliştirilen projede, varsayılan olarak in-memory (H2) veritabanı kullanılır. Herhangi bir ekstra veritabanı kurulumuna ihtiyaç duymadan `local` profiliyle hemen çalıştırıp test edebilirsiniz.
