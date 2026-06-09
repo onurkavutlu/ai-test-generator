@@ -42,13 +42,16 @@ Projede varsayılan olarak **`gemma4:31b-cloud`** modeli kullanılmaktadır. Goo
 
 ## Hızlı Başlangıç
 
-### Gereksinimler
-- Java 17+
-- Maven
-- (İsteğe Bağlı) Docker & Ollama (Yerel LLM kullanımı için)
+En kolay kurulum yöntemi, projeyle birlikte gelen otomatik kurulum scriptini kullanmaktır. Bu script Docker, PostgreSQL, MailHog, Allure, Selenium Grid ve eksikse Ollama (LLM) bağımlılıklarını tek komutla kurup sistemi ayağa kaldırır.
 
 ```bash
-# Projeyi derleme ve çalıştırma
+# Tüm sistemi tek komutla kurup başlatmak için:
+chmod +x setup.sh && ./setup.sh
+```
+
+### Manuel Geliştirme Ortamı (Docker Olmadan)
+Eğer Docker kullanmak istemiyorsanız ve sadece in-memory (H2) veritabanıyla projeyi test etmek isterseniz (Java 17+ gerektirir):
+```bash
 ./mvnw clean install -DskipTests
 ./mvnw spring-boot:run -Dspring.profiles.active=local
 ```

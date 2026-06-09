@@ -42,21 +42,37 @@ if command -v ollama &>/dev/null; then
     fi
   fi
 else
-  warn "Ollama kurulu değil. AI test üretimi için: https://ollama.ai"
-  warn "Devam ediliyor — seed data ile çalışabilirsin"
+  warn "Ollama kurulu değil. Otomatik kurulum başlatılıyor..."
+  if [[ "$OSTYPE" == "darwin"* ]] && command -v brew &>/dev/null; then
+    info "macOS tespit edildi, Homebrew ile Ollama kuruluyor..."
+    brew install --cask ollama
+    info "Kurulum tamamlandı. Lütfen Ollama uygulamasını başlatın, arka planda API erişimi için bekliyoruz..."
+    sleep 10
+    ollama serve &>/dev/null &
+    OLLAMA_RUNNING=true
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    info "Linux tespit edildi, resmi script ile kuruluyor..."
+    curl -fsSL https://ollama.com/install.sh | sh
+    ollama serve &>/dev/null &
+    OLLAMA_RUNNING=true
+  else
+    err "Otomatik kurulum bu işletim sistemi için desteklenmiyor. Lütfen https://ollama.com adresinden manuel kurun."
+  fi
 fi
 
 # ── 3. Ollama modeli çek ───────────────────────────────────────
-MODEL="qwen2.5-coder:1.5b"
+MODEL="gemma4:31b-cloud"
 if [ "$OLLAMA_RUNNING" = true ]; then
   info "Model kontrol ediliyor: $MODEL"
   if ollama list 2>/dev/null | grep -q "$MODEL"; then
     ok "Model zaten mevcut: $MODEL"
   else
-    warn "Model bulunamadı, indiriliyor (~900MB)..."
+    warn "Model bulunamadı, indiriliyor (Bu işlem dosya boyutuna göre vakit alabilir)..."
     ollama pull "$MODEL"
     ok "Model indirildi: $MODEL"
   fi
+else
+  warn "Lütfen uygulamayı çalıştırmadan önce Ollama'yı manuel kurup çalıştırın ve 'ollama run gemma4:31b-cloud' komutunu çalıştırın."
 fi
 
 # ── 4. .env dosyası ────────────────────────────────────────────
