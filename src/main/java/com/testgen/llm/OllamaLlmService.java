@@ -105,10 +105,9 @@ public class OllamaLlmService implements LlmService {
 
         } catch (Exception e) {
             long durationMs = System.currentTimeMillis() - start;
-            log.warn("Ollama çağrısı başarısız ({}ms): {}. Mock devreye giriyor.", durationMs, e.getMessage());
-            String mockResult = MockGenerator.generateFallback(prompt, callType);
-            reportStore.record(LlmCallReport.success(modelName + " (Mock)", callType, prompt, mockResult, durationMs));
-            return mockResult;
+            log.warn("Ollama çağrısı başarısız ({}ms): {}. Lütfen Ollama'yı başlatın ve gemma4:31b-cloud modelini yükleyin.", durationMs, e.getMessage());
+            reportStore.record(LlmCallReport.failure(modelName, callType, prompt, e.getMessage(), durationMs));
+            throw new RuntimeException("LLM bağlantı hatası: " + e.getMessage() + ". Lütfen Ollama'yı başlatın!");
         }
     }
 }
