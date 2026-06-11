@@ -28,7 +28,7 @@ Sistemdeki 8 farklı LLM ajanı, yazılım döngüsünü taklit ederek sıralı 
 * **Test Analyst:** ISTQB kurallarına uygun pozitif ve negatif (BVA, EP) test stratejisi oluşturur.
 * **Test Automation:** Analizleri çalıştırılabilir test kodlarına (Örn: Karate DSL) dönüştürür.
 * **Performance:** SLA metriklerini belirleyip yük/performans testi gereksinimlerini raporlar.
-* **DevOps:** Testlerin CI/CD ve Allure raporlama süreçlerine entegrasyon planını tasarlar.
+* **DevOps:** Testlerin CI/CD (Jenkins vb.) ve Allure raporlama süreçlerine entegrasyon planını tasarlar. Ayrıca OCP (OpenShift) uyumluluğunu sağlar.
 * **SecOps:** OWASP güvenlik zafiyetleri (SQL Injection, XSS, 401/403) için koruma kuralları uygular.
 * **Report:** Tüm verileri konsolide ederek nihai test kapsam oranlarını ve yönetici özetini çıkarır.
 
@@ -81,6 +81,12 @@ Eğer başarısız (FAILED) bir test bulunursa:
 1. `FailureAnalysisService` hatayı analiz eder.
 2. Orijinal kod ve hata çıktısı (stacktrace) bir araya getirilerek düzeltilmiş test senaryosu üretilir.
 3. Yeni senaryo anında koşulur ve sonuçları nihai rapora eklenir.
+
+---
+
+## Dağıtım ve CI/CD (OCP & Jenkins)
+
+Sistem kurumsal mimarilere uygun olarak tam uyumlu bir şekilde **OCP (OpenShift Container Platform)** ortamında çalışacak şekilde tasarlanmıştır. Ayrıca **Jenkins** pipeline'ları ile entegre çalışarak mevcut CI/CD süreçlerinize doğrudan dahil edilebilir ve her build sonrası otomatik test süreçlerini tetikleyebilir.
 
 ---
 
