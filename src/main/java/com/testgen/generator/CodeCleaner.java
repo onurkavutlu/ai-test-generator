@@ -42,16 +42,35 @@ public final class CodeCleaner {
         if (m.find()) {
             cleaned = m.group(1).strip();
         } else {
-            // Feature: ile başlıyorsa direkt kullan
-            String stripped = raw.strip();
-            if (stripped.startsWith("Feature:")) {
-                cleaned = stripped;
-            } else {
-                // Genel temizleme
-                cleaned = raw.replaceAll("```[a-z]*\\n?", "").strip();
-            }
+            // Fence yoksa: fence kalıntılarını sil, LLM'in kod öncesi açıklama metnini at
+            cleaned = stripToFeatureStart(raw.replaceAll("```[a-z]*\\n?", ""));
         }
         return injectTestCaseLlmTag(cleaned);
+    }
+
+    /**
+     * LLM'in "İşte düzeltilmiş kod:" gibi açıklama metinlerini atar —
+     * içerik ilk Feature satırından (hemen üstündeki bitişik tag satırları dahil) başlar.
+     * Feature satırı yoksa içerik olduğu gibi döner.
+     */
+    private static String stripToFeatureStart(String text) {
+        String[] lines = text.split("\\r?\\n");
+        int featureIdx = -1;
+        for (int i = 0; i < lines.length; i++) {
+            if (lines[i].trim().startsWith("Feature:")) {
+                featureIdx = i;
+                break;
+            }
+        }
+        if (featureIdx < 0) {
+            return text.strip();
+        }
+        int start = featureIdx;
+        while (start > 0 && lines[start - 1].trim().startsWith("@")) {
+            start--;
+        }
+        return String.join("\n",
+                java.util.Arrays.copyOfRange(lines, start, lines.length)).strip();
     }
 
     /**
@@ -62,17 +81,48 @@ public final class CodeCleaner {
             return content;
         }
 
-        // 1. Feature seviyesinde @testCaseLLM tag'i var mı? Yoksa ekle.
-        if (!content.contains("@testCaseLLM")) {
-            int featureIndex = content.indexOf("Feature:");
-            if (featureIndex >= 0) {
-                content = content.substring(0, featureIndex) + "@testCaseLLM\n" + content.substring(featureIndex);
+        List<String> lines = new ArrayList<>(java.util.Arrays.asList(content.split("\\r?\\n")));
+
+        // 0. Dangling tag temizliği: Gherkin'de tag satırının HEMEN altında Feature/Scenario/
+        //    Scenario Outline/Examples (veya başka bir tag satırı) olmalı. LLM bazen tag'i
+        //    senaryonun sonuna koyar — bu Karate'de parse hatası üretir ("no viable alternative").
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            String trimmed = lines.get(i).trim();
+            if (!trimmed.startsWith("@")) {
+                continue;
+            }
+            String next = i + 1 < lines.size() ? lines.get(i + 1).trim() : "";
+            boolean valid = next.startsWith("@")
+                    || next.startsWith("Feature:")
+                    || next.startsWith("Scenario:")
+                    || next.startsWith("Scenario Outline:")
+                    || next.startsWith("Examples:");
+            if (!valid) {
+                lines.remove(i);
             }
         }
 
+        // 1. Feature seviyesinde @testCaseLLM tag'i var mı? Yoksa ekle (lokal kontrol:
+        //    Feature satırının hemen üstündeki bitişik tag bloğuna bakılır).
+        for (int i = 0; i < lines.size(); i++) {
+            if (!lines.get(i).trim().startsWith("Feature:")) {
+                continue;
+            }
+            boolean hasFeatureTag = false;
+            int insertAt = i;
+            for (int j = i - 1; j >= 0 && lines.get(j).trim().startsWith("@"); j--) {
+                insertAt = j;
+                if (lines.get(j).contains("@testCaseLLM")) {
+                    hasFeatureTag = true;
+                }
+            }
+            if (!hasFeatureTag) {
+                lines.add(insertAt, "@testCaseLLM");
+            }
+            break;
+        }
+
         // 2. Her Scenario veya Scenario Outline öncesinde @testCaseLLM tag'ini garanti altına al.
-        String[] rawLines = content.split("\\r?\\n");
-        List<String> lines = new ArrayList<>(java.util.Arrays.asList(rawLines));
 
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);

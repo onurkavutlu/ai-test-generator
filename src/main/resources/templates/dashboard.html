@@ -1019,7 +1019,20 @@
                 <input class="form-control" type="url" id="runner-applicationUrl" placeholder="https://example.com">
               </div>
 
-
+              <div class="form-group" style="margin:0;" id="runner-group-rawPayload">
+                <label class="form-label">Endpoint / Raw Request (Opsiyonel — Swagger yerine)</label>
+                <div style="display:grid;grid-template-columns:130px 1fr;gap:8px;margin-bottom:6px;">
+                  <select class="form-control form-select" id="runner-payloadType">
+                    <option value="CURL">cURL</option>
+                    <option value="JSON">JSON</option>
+                    <option value="API_COLLECTION">Postman Collection</option>
+                    <option value="GRAPHQL">GraphQL</option>
+                    <option value="SOAP">SOAP XML</option>
+                  </select>
+                  <span style="font-size:11px;color:var(--text-dim);align-self:center;">Endpoint + request örneği ver, test bundan üretilip koşulur</span>
+                </div>
+                <textarea class="form-control" id="runner-rawPayload" rows="3" style="font-family:'JetBrains Mono',monospace;font-size:11.5px;" placeholder="curl -X POST https://api.example.com/v1/pets -H 'Content-Type: application/json' -d '{&quot;name&quot;:&quot;Boncuk&quot;}'"></textarea>
+              </div>
 
               <div class="form-group" style="margin:0;">
                 <label class="form-label">User Story</label>
@@ -1048,6 +1061,32 @@
               <button class="btn btn-secondary" style="padding:3px 9px;font-size:11px;" onclick="runnerCopyBody()">Kopyala</button>
             </div>
             <pre class="code-content-pre" style="max-height:220px;overflow:auto;"><code id="runner-body-preview" style="font-size:11px;">{}</code></pre>
+          </div>
+
+          <!-- Direkt Çalıştır: endpoint'e anında istek (test üretimi yok) -->
+          <div class="code-container" style="height:auto;">
+            <div class="code-container-header" style="justify-content:space-between;">
+              <span style="font-size:13px;font-weight:600;color:#e2e8f0;">⚡ Direkt Çalıştır</span>
+              <button class="btn btn-primary" style="padding:4px 14px;font-size:12px;" id="direct-run-btn" onclick="directRun()">▶ Çalıştır</button>
+            </div>
+            <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;">
+                <select class="form-control form-select" id="direct-method">
+                  <option>GET</option><option>POST</option><option>PUT</option>
+                  <option>PATCH</option><option>DELETE</option><option>HEAD</option>
+                </select>
+                <input class="form-control" type="url" id="direct-url" placeholder="https://api.example.com/v1/pets/1">
+              </div>
+              <textarea class="form-control" id="direct-headers" rows="2" style="font-family:'JetBrains Mono',monospace;font-size:11.5px;" placeholder='Header (JSON, opsiyonel): {"Authorization": "Bearer ..."}'></textarea>
+              <textarea class="form-control" id="direct-body" rows="3" style="font-family:'JetBrains Mono',monospace;font-size:11.5px;" placeholder='Body (POST/PUT için): {"name": "Boncuk"}'></textarea>
+              <div id="direct-result" style="display:none;">
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                  <span id="direct-status-badge" style="font-size:12px;font-weight:700;padding:3px 12px;border-radius:99px;"></span>
+                  <span id="direct-latency" style="font-size:12px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;"></span>
+                </div>
+                <pre class="code-content-pre" style="max-height:220px;overflow:auto;margin:0;"><code id="direct-response-body" style="font-size:11px;"></code></pre>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -1707,6 +1746,45 @@
       });
     }
 
+    // ── Ajan analiz kartları için mini markdown renderer ──────
+    function roleBadgeLabel(role) {
+      if (!role) return 'AGENT';
+      const label = role.replace(/_/g, ' ').replace(/\bAI LLM\b/i, 'AI').trim().toUpperCase();
+      return label.length > 24 ? label.slice(0, 22) + '…' : label;
+    }
+
+    function renderAgentMarkdown(text) {
+      // Kod fence'lerini ayır: tek tek segment işle (fence içi <pre>, dışı satır bazlı)
+      const segments = text.split(/(```[a-zA-Z]*\n?[\s\S]*?```)/g);
+      let html = '';
+      for (const seg of segments) {
+        if (!seg) continue;
+        if (seg.startsWith('```')) {
+          const code = seg.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim();
+          if (code) {
+            html += `<pre style="background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;padding:10px;margin:6px 0;font-family:'JetBrains Mono',monospace;font-size:11px;overflow-x:auto;white-space:pre-wrap;color:#a5b4fc;">${escapeHtml(code)}</pre>`;
+          }
+          continue;
+        }
+        for (const rawLine of seg.split('\n')) {
+          const line = rawLine.trim();
+          if (!line) continue;
+          let content = escapeHtml(line)
+            .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--text-main);">$1</strong>');
+          if (/^#{2,4}\s+/.test(line)) {
+            html += `<div style="color:var(--color-accent);font-weight:700;margin-top:8px;">${content.replace(/^#{2,4}\s+/, '')}</div>`;
+          } else if (/^[-•*]\s+/.test(line)) {
+            html += `<div style="padding-left:14px;position:relative;"><span style="position:absolute;left:0;color:var(--color-primary);">•</span>${content.replace(/^[-•*]\s+/, '')}</div>`;
+          } else if (/^\d+\.\s+/.test(line)) {
+            html += `<div style="padding-left:6px;">${content}</div>`;
+          } else {
+            html += `<div>${content}</div>`;
+          }
+        }
+      }
+      return html || '<span style="color:var(--text-dim);">(içerik yok)</span>';
+    }
+
     function loadSelectedReport() {
       const select = document.getElementById('reportRequestSelect');
       const requestId = select.value;
@@ -1736,20 +1814,19 @@
           
           const analysesContainer = document.getElementById('agent-analyses-container');
           analysesContainer.innerHTML = '';
-          if (data.agentAnalyses && data.agentAnalyses.length > 0) {
-            data.agentAnalyses.forEach(analysis => {
-              let cleanAnalysis = analysis.analysis
-                .replace(/\n/g, '<br>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-                
+          const meaningfulAnalyses = (data.agentAnalyses || []).filter(a =>
+            a.analysis && a.analysis.trim().length >= 20);
+
+          if (meaningfulAnalyses.length > 0) {
+            meaningfulAnalyses.forEach(analysis => {
               analysesContainer.innerHTML += `
-                <div class="stat-card" style="min-height: 180px; justify-content: flex-start; gap: 12px; background: rgba(255,255,255,0.02); border-color: rgba(168, 85, 247, 0.2);">
-                  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
-                    <span class="stat-label" style="color: var(--color-accent); font-size: 12px;">${analysis.title}</span>
-                    <span class="badge badge-primary" style="font-size: 9px; padding: 2px 6px;">Active</span>
+                <div class="stat-card" style="min-height: 160px; justify-content: flex-start; gap: 12px; background: rgba(255,255,255,0.02); border-color: rgba(168, 85, 247, 0.2);">
+                  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; gap: 8px;">
+                    <span class="stat-label" style="color: var(--color-accent); font-size: 12px;">${escapeHtml(analysis.title)}</span>
+                    <span class="badge badge-primary" style="font-size: 9px; padding: 2px 6px; white-space: nowrap;">${escapeHtml(roleBadgeLabel(analysis.role))}</span>
                   </div>
-                  <div style="font-size: 13px; color: var(--text-muted); max-height: 250px; overflow-y: auto; line-height: 1.6;">
-                    ${cleanAnalysis}
+                  <div style="font-size: 13px; color: var(--text-muted); max-height: 280px; overflow-y: auto; line-height: 1.6;">
+                    ${renderAgentMarkdown(analysis.analysis)}
                   </div>
                 </div>
               `;
@@ -1917,25 +1994,90 @@
       
 
       fw.innerHTML = '';
+      const rawGroup = document.getElementById('runner-group-rawPayload');
       if (type === 'BACKEND_API') {
         fw.innerHTML = '<option value="KARATE">KARATE</option>';
-        swagger.style.display = ''; appUrl.style.display = 'none'; 
+        swagger.style.display = ''; appUrl.style.display = 'none';
+        rawGroup.style.display = '';
       } else if (type === 'FRONTEND_WEB') {
         fw.innerHTML = '<option value="SELENIUM">SELENIUM</option>';
-        swagger.style.display = 'none'; appUrl.style.display = ''; 
-
+        swagger.style.display = 'none'; appUrl.style.display = '';
+        rawGroup.style.display = 'none';
       }
       runnerUpdateBodyPreview();
     }
 
+    // ── Direkt Çalıştır: endpoint'e anında istek ──────────────
+    async function directRun() {
+      const url = document.getElementById('direct-url').value.trim();
+      if (!url) { showToast('Endpoint URL girin.', false); return; }
+
+      let headers = null;
+      const headersRaw = document.getElementById('direct-headers').value.trim();
+      if (headersRaw) {
+        try { headers = JSON.parse(headersRaw); }
+        catch (e) { showToast('Header alanı geçerli JSON değil.', false); return; }
+      }
+
+      const btn = document.getElementById('direct-run-btn');
+      btn.disabled = true; btn.textContent = '⏳';
+
+      try {
+        const res = await fetch('/api/v1/runner/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: url,
+            method: document.getElementById('direct-method').value,
+            headers: headers,
+            body: document.getElementById('direct-body').value.trim() || null
+          })
+        });
+        const data = await res.json();
+
+        const result = document.getElementById('direct-result');
+        const badge  = document.getElementById('direct-status-badge');
+        const latency = document.getElementById('direct-latency');
+        const bodyEl = document.getElementById('direct-response-body');
+        result.style.display = '';
+
+        if (!res.ok) {
+          badge.textContent = 'HATA';
+          badge.style.background = 'rgba(239,68,68,0.15)'; badge.style.color = '#ef4444';
+          latency.textContent = '';
+          bodyEl.textContent = data.error || JSON.stringify(data, null, 2);
+        } else if (data.error) {
+          badge.textContent = 'BAĞLANTI HATASI';
+          badge.style.background = 'rgba(239,68,68,0.15)'; badge.style.color = '#ef4444';
+          latency.textContent = data.latencyMs + 'ms';
+          bodyEl.textContent = data.error;
+        } else {
+          const ok = data.status >= 200 && data.status < 400;
+          badge.textContent = 'HTTP ' + data.status;
+          badge.style.background = ok ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)';
+          badge.style.color = ok ? '#10b981' : '#f59e0b';
+          latency.textContent = data.latencyMs + 'ms';
+          let pretty = data.body || '(boş yanıt)';
+          try { pretty = JSON.stringify(JSON.parse(data.body), null, 2); } catch (e) { /* JSON değil */ }
+          bodyEl.textContent = pretty;
+        }
+      } catch (e) {
+        showToast('Çalıştırma başarısız: ' + e.message, false);
+      } finally {
+        btn.disabled = false; btn.textContent = '▶ Çalıştır';
+      }
+    }
+
     function runnerBuildPayload() {
+      const rawPayload = document.getElementById('runner-rawPayload').value.trim();
       return {
         testType:          document.getElementById('runner-testType').value,
         framework:         document.getElementById('runner-framework').value,
         userStory:         document.getElementById('runner-userStory').value || null,
         swaggerUrl:        document.getElementById('runner-swaggerUrl').value || null,
         applicationUrl:    document.getElementById('runner-applicationUrl').value || null,
-        
+        rawPayload:        rawPayload || null,
+        payloadType:       rawPayload ? document.getElementById('runner-payloadType').value : null,
         additionalContext: document.getElementById('runner-additionalContext').value || null
       };
     }
@@ -1976,7 +2118,7 @@
     }
 
     function runnerClearForm() {
-      ['runner-swaggerUrl','runner-applicationUrl',
+      ['runner-swaggerUrl','runner-applicationUrl','runner-rawPayload',
        'runner-userStory','runner-additionalContext'].forEach(id => {
         document.getElementById(id).value = '';
       });

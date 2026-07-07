@@ -69,7 +69,9 @@ public class FailureAnalysisServiceTest {
         GeneratedTestCase fixedCase = result.get(0);
         assertEquals("GetPetByIdTest_Fixed_v3", fixedCase.getTestName());
         assertEquals("GetPetByIdTest_Fixed_v3.feature", fixedCase.getFileName());
-        assertEquals("Feature: Get pet by id fixed", fixedCase.getTestContent().trim());
+        // CodeCleaner AI üretimi feature'lara @testCaseLLM tag'i enjekte eder
+        assertTrue(fixedCase.getTestContent().contains("Feature: Get pet by id fixed"));
+        assertTrue(fixedCase.getTestContent().contains("@testCaseLLM"));
         assertEquals(TestFramework.KARATE, fixedCase.getFramework());
         assertEquals(TestRunStatus.NOT_RUN, fixedCase.getRunStatus());
         assertTrue(fixedCase.getTestSummary().contains("[AUTO-FIX]") && fixedCase.getTestSummary().contains("GetPetByIdTest"));

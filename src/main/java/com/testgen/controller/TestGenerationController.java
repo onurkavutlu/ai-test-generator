@@ -36,6 +36,7 @@ public class TestGenerationController {
 
     private final TestGenerationService testGenerationService;
     private final TestRunnerService testRunnerService;
+    private final com.testgen.repository.AgentAnalysisRepository agentAnalysisRepository;
 
     /**
      * Test üretme isteği oluştur.
@@ -116,8 +117,23 @@ public class TestGenerationController {
         var testCases = testGenerationService.getTestCasesByRequestId(requestId);
 
         java.util.List<Map<String, String>> analyses = new java.util.ArrayList<>();
+
+        // Öncelik: agent_analyses tablosundaki yapılandırılmış kayıtlar (rol bazlı, temiz)
+        var dbAnalyses = agentAnalysisRepository.findByRequestIdOrderByCreatedAtAsc(requestId);
+        for (var a : dbAnalyses) {
+            if (a.getOutput() == null || a.getOutput().isBlank()) {
+                continue;
+            }
+            analyses.add(Map.of(
+                    "title", a.getTitle() != null ? a.getTitle() : a.getRole(),
+                    "role", a.getRole(),
+                    "analysis", a.getOutput()
+            ));
+        }
+
+        // Fallback: eski istekler için additionalContext string'inden ayrıştır
         String additionalContext = request.getAdditionalContext();
-        if (additionalContext != null && additionalContext.contains("## AI AGENT ANALYSIS")) {
+        if (analyses.isEmpty() && additionalContext != null && additionalContext.contains("## AI AGENT ANALYSIS")) {
             String section = additionalContext.substring(additionalContext.indexOf("## AI AGENT ANALYSIS") + "## AI AGENT ANALYSIS".length()).trim();
             String[] parts = section.split("### ");
             for (String part : parts) {
@@ -125,21 +141,25 @@ public class TestGenerationController {
                 if (part.isEmpty()) continue;
 
                 int firstNewLine = part.indexOf('\n');
-                if (firstNewLine > 0) {
-                    String title = part.substring(0, firstNewLine).trim();
-                    String content = part.substring(firstNewLine).trim();
-                    analyses.add(Map.of(
-                            "title", title,
-                            "role", title.replace(" Agent", ""),
-                            "analysis", content
-                    ));
-                } else {
-                    analyses.add(Map.of(
-                            "title", part,
-                            "role", part.replace(" Agent", ""),
-                            "analysis", ""
-                    ));
+                if (firstNewLine <= 0) {
+                    continue; // başlıktan ibaret bölüm — kart üretme
                 }
+                String title = part.substring(0, firstNewLine).trim();
+                String content = part.substring(firstNewLine).trim();
+                // "Analiz" gibi tek kelimelik kabuk içerikler kart olmasın
+                if (content.isBlank() || content.length() < 20) {
+                    continue;
+                }
+                // Cümle uzunluğundaki pseudo-başlıklar (Supervisor metni) kart başlığı olamaz
+                if (title.length() > 60) {
+                    content = title + "\n" + content;
+                    title = "Supervisor Analizi";
+                }
+                analyses.add(Map.of(
+                        "title", title,
+                        "role", title.replace(" Agent", ""),
+                        "analysis", content
+                ));
             }
         }
 
