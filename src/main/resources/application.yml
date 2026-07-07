@@ -44,7 +44,7 @@ llm:
     max-tokens: 4096
   ollama:
     base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-    model: ${OLLAMA_MODEL:gemma4:31b-cloud}
+    model: ${OLLAMA_MODEL:llama3.1}
     temperature: 0.1
     timeout-seconds: ${OLLAMA_TIMEOUT_SECONDS:900}
 
@@ -53,7 +53,6 @@ test-generator:
     base-path: ${TEST_OUTPUT_PATH:/tmp/generated-tests}
     karate-path: ${TEST_OUTPUT_PATH:/tmp/generated-tests}/karate
     selenium-path: ${TEST_OUTPUT_PATH:/tmp/generated-tests}/selenium
-    appium-path: ${TEST_OUTPUT_PATH:/tmp/generated-tests}/appium
     allure-results: ${TEST_OUTPUT_PATH:/tmp/generated-tests}/allure-results
     allure-report: ${TEST_OUTPUT_PATH:/tmp/generated-tests}/allure-report
   runner:
@@ -65,9 +64,6 @@ test-generator:
     browser: ${SELENIUM_BROWSER:chrome}
     headless: ${SELENIUM_HEADLESS:true}
     remote-url: ${SELENIUM_REMOTE_URL:}
-  appium:
-    server-url: ${APPIUM_SERVER_URL:http://localhost:4723}
-    platform: ${APPIUM_PLATFORM:Android}
 
 notification:
   email:

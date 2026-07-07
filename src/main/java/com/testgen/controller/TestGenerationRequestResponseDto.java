@@ -1,5 +1,6 @@
 package com.testgen.controller;
 
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import com.testgen.model.RequestStatus;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestGenerationRequest;
@@ -7,6 +8,7 @@ import com.testgen.model.TestType;
 
 import java.time.LocalDateTime;
 
+@JacksonXmlRootElement(localName = "testGenerationRequest")
 public record TestGenerationRequestResponseDto(
         String id,
         TestType testType,
@@ -14,8 +16,9 @@ public record TestGenerationRequestResponseDto(
         String userStory,
         String swaggerUrl,
         String applicationUrl,
-        String appPackage,
         String additionalContext,
+        String rawPayload,
+        String payloadType,
         RequestStatus status,
         boolean scheduledRun,
         LocalDateTime lastScheduledRunAt,
@@ -33,8 +36,9 @@ public record TestGenerationRequestResponseDto(
                 request.getUserStory(),
                 request.getSwaggerUrl(),
                 request.getApplicationUrl(),
-                request.getAppPackage(),
                 request.getAdditionalContext(),
+                request.getRawPayload(),
+                request.getPayloadType(),
                 request.getStatus(),
                 request.isScheduledRun(),
                 request.getLastScheduledRunAt(),

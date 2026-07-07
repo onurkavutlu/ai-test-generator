@@ -24,6 +24,9 @@ public class FailureAnalysisServiceTest {
     @Mock
     private GeneratedTestCaseRepository testCaseRepository;
 
+    @Mock
+    private com.testgen.service.AgentLearningService agentLearningService;
+
     @InjectMocks
     private FailureAnalysisService failureAnalysisService;
 
@@ -70,7 +73,30 @@ public class FailureAnalysisServiceTest {
         assertEquals(TestFramework.KARATE, fixedCase.getFramework());
         assertEquals(TestRunStatus.NOT_RUN, fixedCase.getRunStatus());
         assertTrue(fixedCase.getTestSummary().contains("[AUTO-FIX]") && fixedCase.getTestSummary().contains("GetPetByIdTest"));
+        // Yeni case parent'ın deneme sayısını devralmalı; sıfırlanırsa heal zinciri limiti aşar
+        assertEquals(3, fixedCase.getHealAttempts());
 
         verify(llmService, times(1)).generateTestCase(anyString(), anyString());
+    }
+
+    @Test
+    public void testMaxHealAttemptsReachedSkipsCase() {
+        org.springframework.test.util.ReflectionTestUtils.setField(failureAnalysisService, "maxHealAttempts", 3);
+
+        TestGenerationRequest request = TestGenerationRequest.builder().id("req-456").build();
+
+        GeneratedTestCase exhaustedCase = GeneratedTestCase.builder()
+                .testName("GetPetByIdTest_Fixed_v3")
+                .fileName("GetPetByIdTest_Fixed_v3.feature")
+                .runStatus(TestRunStatus.FAILED)
+                .framework(TestFramework.KARATE)
+                .request(request)
+                .healAttempts(3)
+                .build();
+
+        List<GeneratedTestCase> result = failureAnalysisService.analyzeAndGenerateNew(List.of(exhaustedCase), request);
+
+        assertTrue(result.isEmpty());
+        verifyNoInteractions(llmService);
     }
 }

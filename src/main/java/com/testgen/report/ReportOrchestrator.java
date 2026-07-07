@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.nio.file.Path;
 
 /**
  * Raporlama orkestratörü.
@@ -26,7 +27,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ReportOrchestrator {
 
-    private final AllureReportService    allureReportService;
+    private final AllureReportService   allureReportService;
+    private final CucumberReportService cucumberReportService;
 
     // Email servisi isteğe bağlı (conditional bean)
     @Autowired(required = false)
@@ -47,9 +49,15 @@ public class ReportOrchestrator {
         // 1. Allure JSON result'larını yaz
         allureReportService.writeAllResults(testCases, requestId);
 
-        // 2. HTML rapor üret (allure CLI)
+        // 2. Allure HTML rapor üret (allure CLI)
         AllureReportResult allureResult = allureReportService.generateHtmlReport(requestId);
         String reportUrl = allureResult.isSuccess() ? allureResult.getReportUrl() : null;
+
+        // 2.5. Cucumber HTML rapor üret
+        Path cucumberReportPath = cucumberReportService.generateReport(requestId, testCases);
+        if (cucumberReportPath != null) {
+            log.info("Cucumber raporu hazır: {}", cucumberReportPath);
+        }
 
         // 3. Özet DTO
         TestReportSummary summary = TestReportSummary.from(requestId, request.getAdditionalContext(), testCases, reportUrl);

@@ -36,7 +36,7 @@ The 8 different LLM agents in the system work sequentially, mimicking the softwa
 
 ## LLM Model Used
 
-By default, the **`gemma4:31b-cloud`** model is used in the project. This model, from Google's powerful Gemma 4 series, can thoroughly analyze complex Swagger files and multi-agent communications in a single pass thanks to its 256K wide context window capacity. The infrastructure is designed to easily adapt to different local models via Ollama if desired.
+By default, the **`llama3.1`** model is used in the project. This open-source model supports Tool Calling, which powers the autonomous Supervisor agent orchestration. The infrastructure is designed to easily adapt to different local models via Ollama if desired (set `OLLAMA_MODEL` in `.env`).
 
 ---
 

@@ -57,7 +57,6 @@ public class AiTestDataGenerationService {
                 User story: %s
                 Swagger URL: %s
                 Application URL: %s
-                App package: %s
                 Ek baglam: %s
 
                 Kurallar:
@@ -73,7 +72,6 @@ public class AiTestDataGenerationService {
                 3. Secilen frameworke gore kullanilabilir olsun:
                    - KARATE: endpoint path, method, request body, expected status, expected response alanlari.
                    - SELENIUM: kullanici, form inputlari, selectorlar, beklenen UI mesajlari.
-                   - APPIUM: cihaz/platform, app state, locatorlar, gesture/input ve beklenen ekran durumlari.
                 4. Regression icin en az 3 veri varyasyonu, negative icin en az 2 hata varyasyonu ver.
                 5. Performance datasinda makul timeout/budget beklentisi belirt.
                 6. Security datasinda yetkisiz/eksik token/rol uyumsuzlugu gibi kontrol belirt.
@@ -84,7 +82,6 @@ public class AiTestDataGenerationService {
                 valueOrDash(request.getUserStory()),
                 valueOrDash(request.getSwaggerUrl()),
                 valueOrDash(request.getApplicationUrl()),
-                valueOrDash(request.getAppPackage()),
                 valueOrDash(request.getAdditionalContext())
         );
     }

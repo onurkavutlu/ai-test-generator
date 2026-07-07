@@ -2,6 +2,7 @@ package com.testgen.controller;
 
 import com.testgen.config.BadRequestException;
 import com.testgen.model.*;
+import com.testgen.model.TestRunStatus;
 import com.testgen.runner.TestRunnerService;
 import com.testgen.service.TestGenerationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,9 +10,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -25,7 +28,7 @@ import java.util.Map;
  * GET  /api/v1/tests               → Tüm istekleri listele
  */
 @Slf4j
-@Tag(name = "1. AI Test Üretim ve Çalıştırma", description = "Yapay zeka ile Karate, Selenium ve Appium test üretimi ve koşumu API'leri")
+@Tag(name = "1. AI Test Üretim ve Çalıştırma", description = "Yapay zeka ile Karate ve Selenium test üretimi ve koşumu API'leri")
 @RestController
 @RequestMapping("/api/v1/tests")
 @RequiredArgsConstructor
@@ -38,8 +41,10 @@ public class TestGenerationController {
      * Test üretme isteği oluştur.
      * Üretim async olarak başlar, status PENDING → GENERATING → GENERATED
      */
-    @Operation(summary = "Yapay Zeka ile Test Üretim İsteği Başlat", description = "Verilen kullanıcı hikayesi (User Story) veya OpenAPI/Swagger linkine göre Karate DSL, Selenium veya Appium test senaryolarını asenkron olarak üretir.", tags = { "3. Sunum ve Demo Akışı (Adım Adım)", "1. AI Test Üretim ve Çalıştırma" })
-    @PostMapping("/generate")
+    @Operation(summary = "Yapay Zeka ile Test Üretim İsteği Başlat", description = "Verilen kullanıcı hikayesi (User Story) veya OpenAPI/Swagger linkine göre Karate DSL veya Selenium test senaryolarını asenkron olarak üretir.", tags = { "3. Sunum ve Demo Akışı (Adım Adım)", "1. AI Test Üretim ve Çalıştırma" })
+    @PostMapping(value = "/generate",
+            consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE},
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
     public ResponseEntity<Map<String, Object>> generate(
             @Valid @RequestBody TestGenerationRequestDto dto,
             @RequestParam(defaultValue = "true") boolean autoRun,
@@ -53,8 +58,9 @@ public class TestGenerationController {
                 .userStory(dto.userStory())
                 .swaggerUrl(dto.swaggerUrl())
                 .applicationUrl(dto.applicationUrl())
-                .appPackage(dto.appPackage())
                 .additionalContext(dto.additionalContext())
+                .rawPayload(dto.rawPayload())
+                .payloadType(dto.payloadType())
                 .build();
 
         var saved = testGenerationService.createRequest(request);
@@ -80,7 +86,8 @@ public class TestGenerationController {
      * İstek durumunu getir
      */
     @Operation(summary = "Test Üretim İstek Durumunu Sorgula", description = "Verilen requestId ile üretim işleminin anlık durumunu sorgular (PENDING, GENERATING, GENERATED, FAILED).", tags = { "3. Sunum ve Demo Akışı (Adım Adım)", "1. AI Test Üretim ve Çalıştırma" })
-    @GetMapping("/{requestId}")
+    @GetMapping(value = "/{requestId}",
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
     public ResponseEntity<TestGenerationRequestResponseDto> getRequest(@PathVariable String requestId) {
         return ResponseEntity.ok(TestGenerationRequestResponseDto.from(
                 testGenerationService.getRequest(requestId)));
@@ -90,7 +97,8 @@ public class TestGenerationController {
      * Üretilen test case'leri getir
      */
     @Operation(summary = "Üretilen Test Kodlarını Listele", description = "Belirli bir istek sonucu üretilmiş ve veritabanına kaydedilmiş tüm test case içeriklerini ve kodlarını getirir.", tags = { "3. Sunum ve Demo Akışı (Adım Adım)", "1. AI Test Üretim ve Çalıştırma" })
-    @GetMapping("/{requestId}/cases")
+    @GetMapping(value = "/{requestId}/cases",
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
     public ResponseEntity<List<GeneratedTestCaseResponseDto>> getTestCases(@PathVariable String requestId) {
         return ResponseEntity.ok(testGenerationService.getTestCasesByRequestId(requestId)
                 .stream()
@@ -221,12 +229,62 @@ public class TestGenerationController {
      * Tüm üretme isteklerini listele
      */
     @Operation(summary = "Tüm Test İsteklerini Listele", description = "Veritabanında kayıtlı olan tüm geçmiş test üretim isteklerini getirir.")
-    @GetMapping
+    @GetMapping(produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
     public ResponseEntity<List<TestGenerationRequestResponseDto>> listAll() {
         return ResponseEntity.ok(testGenerationService.getAllRequests()
                 .stream()
                 .map(TestGenerationRequestResponseDto::from)
                 .toList());
+    }
+
+    /**
+     * Performance Agent metriklerini parse ederek yapılandırılmış hâlde döner.
+     * Runner UI'ın performance sekmesinde kullanılır.
+     */
+    @Operation(summary = "Performance Agent Metriklerini Getir",
+            description = "İstekteki PerformanceAgent çıktısını parse edip latency, throughput, boundary ve yük profili maddelerini döner.")
+    @GetMapping(value = "/{requestId}/performance-metrics",
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+    public ResponseEntity<Map<String, Object>> getPerformanceMetrics(@PathVariable String requestId) {
+        var request = testGenerationService.getRequest(requestId);
+        String ctx = request.getAdditionalContext();
+
+        List<String> bullets = new ArrayList<>();
+        String rawSection = "";
+
+        if (ctx != null && ctx.contains("Performance Agent")) {
+            int start = ctx.indexOf("Performance Agent");
+            int end   = ctx.indexOf("###", start + 1);
+            rawSection = end > start ? ctx.substring(start, end) : ctx.substring(start);
+
+            for (String line : rawSection.split("\n")) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("-") || trimmed.startsWith("•") || trimmed.matches("^\\d+\\..*")) {
+                    bullets.add(trimmed.replaceFirst("^[-•\\d+\\.]+\\s*", "").trim());
+                }
+            }
+        }
+
+        var testCases = testGenerationService.getTestCasesByRequestId(requestId);
+        long totalMs  = testCases.stream().mapToLong(tc -> tc.getExecutionTimeMs() != null ? tc.getExecutionTimeMs() : 0).sum();
+        long passed   = testCases.stream().filter(tc -> tc.getRunStatus() == TestRunStatus.PASSED).count();
+        long failed   = testCases.stream().filter(tc -> tc.getRunStatus() == TestRunStatus.FAILED).count();
+        long total    = testCases.size();
+        double avgMs  = total > 0 ? (double) totalMs / total : 0;
+
+        return ResponseEntity.ok(Map.of(
+                "requestId",       requestId,
+                "agentInsights",   bullets,
+                "rawAgentOutput",  rawSection.trim(),
+                "executionStats", Map.of(
+                        "totalTestCases",    total,
+                        "passedCount",       passed,
+                        "failedCount",       failed,
+                        "totalExecutionMs",  totalMs,
+                        "avgExecutionMs",    Math.round(avgMs),
+                        "passRate",          total > 0 ? Math.round(passed * 100.0 / total) + "%" : "N/A"
+                )
+        ));
     }
 
     /**
@@ -242,14 +300,13 @@ public class TestGenerationController {
         boolean valid = switch (dto.testType()) {
             case BACKEND_API -> dto.framework() == TestFramework.KARATE;
             case FRONTEND_WEB -> dto.framework() == TestFramework.SELENIUM;
-            case MOBILE -> dto.framework() == TestFramework.APPIUM;
         };
 
         if (!valid) {
             throw new BadRequestException(
                     "testType/framework uyumsuz: " + dto.testType() + " icin " + dto.framework()
                             + " kullanilamaz. Gecerli eslesmeler: BACKEND_API/KARATE, "
-                            + "FRONTEND_WEB/SELENIUM, MOBILE/APPIUM");
+                            + "FRONTEND_WEB/SELENIUM");
         }
     }
 }

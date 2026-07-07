@@ -25,8 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-    "spring.datasource.url=jdbc:h2:mem:testdb_gen;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE",
-    "test-generator.seeding.enabled=false"
+    "spring.datasource.url=jdbc:h2:mem:testdb_gen;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"
 })
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
@@ -51,9 +50,10 @@ public class TestGenerationControllerTest {
                 TestFramework.KARATE,
                 "User story for API test",
                 "https://petstore3.swagger.io/api/v3/openapi.json",
-                null,
-                null,
-                "API context"
+                null, // applicationUrl
+                "API context",
+                null, // rawPayload
+                null  // payloadType
         );
 
         TestGenerationRequest request = TestGenerationRequest.builder()
@@ -88,9 +88,10 @@ public class TestGenerationControllerTest {
                 TestFramework.KARATE,
                 "User story for API test",
                 "https://petstore3.swagger.io/api/v3/openapi.json",
-                null,
-                null,
-                "API context"
+                null, // applicationUrl
+                "API context",
+                null, // rawPayload
+                null  // payloadType
         );
 
         TestGenerationRequest request = TestGenerationRequest.builder()
@@ -117,15 +118,16 @@ public class TestGenerationControllerTest {
 
     @Test
     public void testGenerateIncompatibleFramework() throws Exception {
-        // BACKEND_API with SELENIUM is incompatible (valid pairings: BACKEND_API/KARATE, FRONTEND_WEB/SELENIUM, MOBILE/APPIUM)
+        // BACKEND_API with SELENIUM is incompatible (valid pairings: BACKEND_API/KARATE, FRONTEND_WEB/SELENIUM)
         TestGenerationRequestDto dto = new TestGenerationRequestDto(
                 TestType.BACKEND_API,
                 TestFramework.SELENIUM,
                 "User story",
                 null,
-                null,
-                null,
-                null
+                null, // applicationUrl
+                null, // additionalContext
+                null, // rawPayload
+                null  // payloadType
         );
 
         mockMvc.perform(post("/api/v1/tests/generate")

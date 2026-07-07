@@ -1,0 +1,21 @@
+# ═══════════════════════════════════════════════════════════════
+#  Docker / kurumsal koşum profili
+#  Base application.yml'yi (PostgreSQL) devralır; yalnızca container'a
+#  özgü ayarları override eder. H2'ye DÜŞMEZ — veri postgres volume'da kalıcıdır.
+# ═══════════════════════════════════════════════════════════════
+spring:
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+
+management:
+  health:
+    # MailHog opsiyonel; SMTP erişilemezse health DOWN olmasın
+    mail:
+      enabled: false
+
+logging:
+  level:
+    com.testgen: INFO
+    org.springframework: WARN

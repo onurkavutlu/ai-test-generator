@@ -15,7 +15,7 @@ public interface TestGenerationRequestRepository
     @Query("""
         SELECT r FROM TestGenerationRequest r
         WHERE r.scheduledRun = true
-          AND r.status = 'GENERATED'
+          AND r.status = com.testgen.model.RequestStatus.GENERATED
         ORDER BY r.createdAt ASC
     """)
     List<TestGenerationRequest> findAllScheduled();
@@ -25,7 +25,7 @@ public interface TestGenerationRequestRepository
         SELECT r FROM TestGenerationRequest r
         WHERE r.scheduledRun = true
           AND r.autoGenerateOnFailure = true
-          AND r.status = 'GENERATED'
+          AND r.status = com.testgen.model.RequestStatus.GENERATED
     """)
     List<TestGenerationRequest> findScheduledWithAutoGenerate();
 }

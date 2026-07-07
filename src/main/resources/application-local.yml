@@ -13,8 +13,8 @@ spring:
       ddl-auto: update
     open-in-view: false
   mail:
-    host: localhost
-    port: 1025
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
 
 llm:
   ollama:
@@ -23,7 +23,7 @@ llm:
 
 notification:
   email:
-    enabled: false
+    enabled: ${EMAIL_NOTIFICATIONS_ENABLED:true}
 
 management:
   health:
@@ -37,7 +37,6 @@ test-generator:
     base-path: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}
     karate-path: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/karate
     selenium-path: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/selenium
-    appium-path: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/appium
     allure-results: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/allure-results
     allure-report: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/allure-report
 

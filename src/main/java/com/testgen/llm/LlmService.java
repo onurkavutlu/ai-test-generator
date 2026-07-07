@@ -19,7 +19,7 @@ public interface LlmService {
 
     /**
      * Çağrı tipini belirterek test case üretir (raporlama için).
-     * callType: KARATE | SELENIUM | APPIUM | FAILURE_ANALYSIS | AGENT | GENERIC
+     * callType: KARATE | SELENIUM | FAILURE_ANALYSIS | AGENT | GENERIC
      */
     default String generateTestCase(String prompt, String callType) {
         return generateTestCase(prompt);
@@ -31,12 +31,23 @@ public interface LlmService {
     String generateFromSwagger(String swaggerContent, String endpoint, String method, String context);
 
     /**
+     * Raw payload (cURL/JSON/XML) okuyup Karate feature üretir.
+     */
+    String generateFromRawPayload(String rawPayload, String payloadType, String context);
+
+    /**
+     * GraphQL payload okuyup Karate feature üretir.
+     */
+    String generateFromGraphQL(String graphqlDetails, String context);
+
+    /**
+     * SOAP XML payload okuyup Karate feature üretir.
+     */
+    String generateFromSoap(String soapXml, String context);
+
+    /**
      * UI screenshot veya selector bilgisine göre Selenium test üretir.
      */
     String generateSeleniumTest(String pageUrl, String userStory, String htmlHint);
 
-    /**
-     * Mobil app bilgisine göre Appium test üretir.
-     */
-    String generateAppiumTest(String appPackage, String userStory, String platform, String additionalContext);
 }

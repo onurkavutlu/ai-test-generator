@@ -21,8 +21,6 @@ public class MockGenerator {
             framework = frameworkOverride;
         } else if (prompt.contains("Selenium") || prompt.contains("SELENIUM")) {
             framework = "SELENIUM";
-        } else if (prompt.contains("Appium") || prompt.contains("APPIUM")) {
-            framework = "APPIUM";
         } else if (prompt.contains("Karate") || prompt.contains("KARATE")) {
             framework = "KARATE";
         } else {
@@ -150,28 +148,17 @@ public class MockGenerator {
                     }
                     ```
                     """.formatted(userStory);
-        } else {
-            // APPIUM
-            return """
-                    ```java
-                    package com.testgen.generated;
-                    
-                    import org.junit.jupiter.api.Test;
-                    import io.appium.java_client.AppiumBy;
-                    import io.appium.java_client.android.AndroidDriver;
-                    import static org.junit.jupiter.api.Assertions.assertNotNull;
-                    
-                    public class AppiumAutomationTest {
-                        @Test
-                        public void testMobileApp() {
-                            // %s
-                            AndroidDriver driver = null; // initialized externally
-                            assertNotNull(driver.findElement(AppiumBy.accessibilityId("home_button")));
-                        }
-                    }
-                    ```
-                    """.formatted(userStory);
         }
+
+        // Bilinmeyen framework — basit Karate iskeletiyle dön
+        return """
+                ```gherkin
+                Feature: %s
+
+                  Scenario: Temel Senaryo
+                    * print 'mock fallback'
+                ```
+                """.formatted(userStory);
     }
 
     private static String extractField(String prompt, String fieldName) {

@@ -21,6 +21,13 @@ generated-tests/
 .DS_Store
 Thumbs.db
 
+# Ofis dokümanları ve geçici çıktılar (repo'ya ait değil)
+*.docx
+*.pptx
+~$*
+report.json
+logs/
+
 # Docker
 .docker/
 

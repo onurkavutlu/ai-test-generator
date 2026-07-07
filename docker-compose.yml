@@ -23,10 +23,12 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # ── Profil: PostgreSQL kullan (H2 local profiline düşme) ──
+      SPRING_PROFILES_ACTIVE: docker
       # ── LLM: Ollama (OpenAI key gerekmez) ──
       LLM_PROVIDER: ollama
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
-      OLLAMA_MODEL: gemma4:31b-cloud
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
       OLLAMA_TIMEOUT_SECONDS: "900"
       # ── OpenAI (kullanılmıyor ama boş geçmemeli) ──
       OPENAI_API_KEY: not-needed
@@ -37,8 +39,6 @@ services:
       # ── Selenium ──
       SELENIUM_HEADLESS: "true"
       SELENIUM_REMOTE_URL: http://selenium-hub:4444/wd/hub
-      # ── Appium ──
-      APPIUM_SERVER_URL: http://appium:4723
       # ── Test Output ──
       TEST_OUTPUT_PATH: /tmp/generated-tests
       # ── Email (MailHog) ──

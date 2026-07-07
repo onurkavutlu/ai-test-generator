@@ -49,14 +49,7 @@ public class SwaggerConfig {
                 .build();
     }
 
-    @Bean
-    public GroupedOpenApi devGroup() {
-        return GroupedOpenApi.builder()
-                .group("4-dev-tools")
-                .displayName("4. Geliştirici Araçları & Seed")
-                .pathsToMatch("/api/v1/dev/**", "/api/v1/mock-configs/**")
-                .build();
-    }
+    // Dev group removed as requested
 
     private OpenApiCustomizer demoOpenApiCustomizer() {
         return openApi -> {

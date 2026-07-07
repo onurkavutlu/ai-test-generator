@@ -41,8 +41,8 @@ public class AiTestDataGenerationServiceTest {
         AiTestDataGenerationService service = new AiTestDataGenerationService(llmService);
 
         TestGenerationRequest request = TestGenerationRequest.builder()
-                .testType(TestType.MOBILE)
-                .framework(TestFramework.APPIUM)
+                .testType(TestType.BACKEND_API)
+                .framework(TestFramework.KARATE)
                 .build();
 
         when(llmService.generateTestCase(org.mockito.ArgumentMatchers.anyString()))

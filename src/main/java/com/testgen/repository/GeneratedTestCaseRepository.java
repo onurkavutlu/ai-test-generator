@@ -23,7 +23,7 @@ public interface GeneratedTestCaseRepository
     @Query("""
         SELECT tc FROM GeneratedTestCase tc
         WHERE tc.request.id = :requestId
-          AND tc.runStatus = 'FAILED'
+          AND tc.runStatus = com.testgen.model.TestRunStatus.FAILED
         ORDER BY tc.lastRunAt DESC
     """)
     List<GeneratedTestCase> findFailedByRequestId(@Param("requestId") String requestId);
@@ -33,7 +33,7 @@ public interface GeneratedTestCaseRepository
         SELECT COUNT(tc) FROM GeneratedTestCase tc
         WHERE tc.request.id = :requestId
           AND tc.framework = :framework
-          AND tc.runStatus = 'FAILED'
+          AND tc.runStatus = com.testgen.model.TestRunStatus.FAILED
     """)
     long countFailedByRequestIdAndFramework(
             @Param("requestId") String requestId,

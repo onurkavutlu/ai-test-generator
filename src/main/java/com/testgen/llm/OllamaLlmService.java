@@ -26,7 +26,7 @@ public class OllamaLlmService implements LlmService {
 
     private static final String SYSTEM_PROMPT = """
             Sen uzman bir test otomasyon mühendisisin.
-            Görevin: Karate DSL, Selenium (Java/Page Object Model) ve Appium kullanarak
+            Görevin: Karate DSL ve Selenium (Java/Page Object Model) kullanarak
             production-ready, kapsamlı test case'leri üretmek.
 
             KURALLAR:
@@ -39,24 +39,15 @@ public class OllamaLlmService implements LlmService {
             """;
 
     public OllamaLlmService(
-            @Value("${llm.ollama.base-url}") String baseUrl,
+            ChatLanguageModel chatModel,
             @Value("${llm.ollama.model}") String model,
-            @Value("${llm.ollama.temperature}") double temperature,
-            @Value("${llm.ollama.timeout-seconds:300}") long timeoutSeconds,
             LlmReportStore reportStore) {
 
         this.modelName   = model;
         this.reportStore = reportStore;
-        this.chatModel   = OllamaChatModel.builder()
-                .baseUrl(baseUrl)
-                .modelName(model)
-                .temperature(temperature)
-                .timeout(Duration.ofSeconds(timeoutSeconds))
-                .numPredict(2048)   // yanıt uzunluğu (token)
-                .numCtx(8192)       // context window — 7B için
-                .build();
+        this.chatModel   = chatModel;
 
-        log.info("Ollama LLM Service başlatıldı — model: {}, url: {}", model, baseUrl);
+        log.info("Ollama LLM Service başlatıldı — model: {}", model);
     }
 
     @Override
@@ -64,7 +55,7 @@ public class OllamaLlmService implements LlmService {
         return callLlm(prompt, "GENERIC");
     }
 
-    /** Framework tipiyle çağır (KARATE / SELENIUM / APPIUM / FAILURE_ANALYSIS). */
+    /** Framework tipiyle çağır (KARATE / SELENIUM / FAILURE_ANALYSIS). */
     public String generateTestCase(String prompt, String callType) {
         return callLlm(prompt, callType != null ? callType : "GENERIC");
     }
@@ -76,15 +67,27 @@ public class OllamaLlmService implements LlmService {
     }
 
     @Override
-    public String generateSeleniumTest(String pageUrl, String userStory, String htmlHint) {
-        String prompt = PromptTemplates.buildSeleniumPrompt(pageUrl, userStory, htmlHint);
-        return callLlm(prompt, "SELENIUM");
+    public String generateFromRawPayload(String rawPayload, String payloadType, String context) {
+        String prompt = PromptTemplates.buildRawPayloadPrompt(rawPayload, payloadType, context);
+        return callLlm(prompt, "KARATE");
     }
 
     @Override
-    public String generateAppiumTest(String appPackage, String userStory, String platform, String additionalContext) {
-        String prompt = PromptTemplates.buildAppiumPrompt(appPackage, userStory, platform, additionalContext);
-        return callLlm(prompt, "APPIUM");
+    public String generateFromGraphQL(String graphqlDetails, String context) {
+        String prompt = PromptTemplates.buildGraphQLPrompt(graphqlDetails, context);
+        return callLlm(prompt, "KARATE");
+    }
+
+    @Override
+    public String generateFromSoap(String soapXml, String context) {
+        String prompt = PromptTemplates.buildSoapPrompt(soapXml, context);
+        return callLlm(prompt, "KARATE");
+    }
+
+    @Override
+    public String generateSeleniumTest(String pageUrl, String userStory, String htmlHint) {
+        String prompt = PromptTemplates.buildSeleniumPrompt(pageUrl, userStory, htmlHint);
+        return callLlm(prompt, "SELENIUM");
     }
 
     // ─────────────────────────────────────────────────────────

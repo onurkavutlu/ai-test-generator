@@ -10,4 +10,9 @@ public class HomeController {
     public String home() {
         return "dashboard";
     }
+
+    @GetMapping("/comparer")
+    public String comparer() {
+        return "comparer";
+    }
 }

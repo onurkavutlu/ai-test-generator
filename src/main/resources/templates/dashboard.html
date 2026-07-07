@@ -698,6 +698,12 @@
       <div class="nav-link" onclick="switchView('system-logs')" id="nav-system-logs">
         <span>📝</span> Sistem Logları
       </div>
+      <div class="nav-link" onclick="switchView('runner')" id="nav-runner" style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.06); padding-top:12px;">
+        <span>🚀</span> Runner
+      </div>
+      <a class="nav-link" href="/comparer" style="text-decoration:none;">
+        <span>⚖️</span> Endpoint Comparer
+      </a>
     </div>
     
     <div class="sidebar-footer">
@@ -715,7 +721,7 @@
       <div class="view-header">
         <div class="view-title-section">
           <h2>Test Üretim İstekleri</h2>
-          <p>Yapay zeka modelleri tarafından oluşturulan Karate, Selenium ve Appium test paketleri</p>
+          <p>Yapay zeka modelleri tarafından oluşturulan Karate ve Selenium test paketleri</p>
         </div>
         <button class="btn btn-primary" onclick="switchView('create')">
           <span>+</span> Yeni İstek Oluştur
@@ -780,7 +786,7 @@
               <select class="form-control form-select" id="testType" required onchange="adaptFrameworkOptions()">
                 <option value="BACKEND_API">BACKEND_API (Rest/SOAP)</option>
                 <option value="FRONTEND_WEB">FRONTEND_WEB (Browser)</option>
-                <option value="MOBILE">MOBILE (Android/iOS)</option>
+                
               </select>
             </div>
             <div class="form-group">
@@ -801,10 +807,7 @@
             <input class="form-control" type="url" id="applicationUrl" placeholder="https://example.com">
           </div>
 
-          <div class="form-group" id="group-appPackage" style="display: none;">
-            <label for="appPackage">Mobil Paket Adı (App Package)</label>
-            <input class="form-control" type="text" id="appPackage" placeholder="com.example.android.app">
-          </div>
+
 
           <div class="form-group">
             <label for="userStory">Kullanıcı Hikayesi (User Story) / Test Amacı</label>
@@ -954,6 +957,188 @@
       </div>
     </div>
 
+    <!-- VIEW 6: RUNNER (Postman benzeri) -->
+    <div class="view-section" id="view-runner">
+      <div class="view-header">
+        <div class="view-title-section">
+          <h2>🚀 Runner</h2>
+          <p>Postman benzeri test çalıştırıcı — request gönder, performans metriklerini ve Cucumber raporunu gör</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="runner-format" class="form-control form-select" style="width:110px;padding:8px 12px;font-size:13px;">
+            <option value="json">JSON</option>
+            <option value="xml">XML</option>
+          </select>
+          <button class="btn btn-secondary" onclick="runnerLoadHistory()">📋 Geçmiş</button>
+        </div>
+      </div>
+
+      <!-- Ana İki Kolon -->
+      <div style="display:grid;grid-template-columns:420px 1fr;gap:20px;align-items:start;">
+
+        <!-- SOL: Request Builder -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+
+          <!-- Request Paneli -->
+          <div class="code-container" style="height:auto;">
+            <div class="code-container-header" style="justify-content:space-between;">
+              <span style="font-size:13px;font-weight:600;color:#e2e8f0;">📤 Request</span>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="runnerClearForm()">Temizle</button>
+                <button class="btn btn-primary" style="padding:4px 14px;font-size:12px;" onclick="runnerSend()" id="runner-send-btn">
+                  ▶ Gönder
+                </button>
+              </div>
+            </div>
+            <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label">Test Tipi</label>
+                  <select class="form-control form-select" id="runner-testType" onchange="runnerAdaptFramework()">
+                    <option value="BACKEND_API">BACKEND_API</option>
+                    <option value="FRONTEND_WEB">FRONTEND_WEB</option>
+                    
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label">Framework</label>
+                  <select class="form-control form-select" id="runner-framework">
+                    <option value="KARATE">KARATE</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin:0;" id="runner-group-swagger">
+                <label class="form-label">Swagger URL</label>
+                <input class="form-control" type="url" id="runner-swaggerUrl" placeholder="https://petstore3.swagger.io/api/v3/openapi.json">
+              </div>
+
+              <div class="form-group" style="margin:0;display:none;" id="runner-group-appUrl">
+                <label class="form-label">Uygulama URL</label>
+                <input class="form-control" type="url" id="runner-applicationUrl" placeholder="https://example.com">
+              </div>
+
+
+
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">User Story</label>
+                <textarea class="form-control" id="runner-userStory" rows="3" placeholder="Kullanıcı sisteme login olabilmeli..."></textarea>
+              </div>
+
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">Ek Bağlam (Opsiyonel)</label>
+                <textarea class="form-control" id="runner-additionalContext" rows="2" placeholder="Ekstra test datası, kısıtlar..."></textarea>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;">
+                <input type="checkbox" id="runner-autoRun" checked style="width:16px;height:16px;cursor:pointer;">
+                <label for="runner-autoRun" style="font-size:13px;color:var(--text-muted);cursor:pointer;">
+                  Üretim bitince otomatik koştur
+                </label>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Request Body Preview -->
+          <div class="code-container" style="height:auto;">
+            <div class="code-container-header" style="justify-content:space-between;">
+              <span style="font-size:12px;font-weight:600;color:#e2e8f0;" id="runner-body-label">📄 Request Body (JSON)</span>
+              <button class="btn btn-secondary" style="padding:3px 9px;font-size:11px;" onclick="runnerCopyBody()">Kopyala</button>
+            </div>
+            <pre class="code-content-pre" style="max-height:220px;overflow:auto;"><code id="runner-body-preview" style="font-size:11px;">{}</code></pre>
+          </div>
+
+        </div>
+
+        <!-- SAĞ: Response + Metrics + Cucumber -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+
+          <!-- Status Bar -->
+          <div id="runner-status-bar" style="display:none;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:16px;">
+            <span id="runner-status-badge" style="font-size:12px;font-weight:700;padding:4px 12px;border-radius:99px;background:rgba(99,102,241,0.15);color:#6366f1;">PENDING</span>
+            <span id="runner-request-id-display" style="font-size:12px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;"></span>
+            <div style="margin-left:auto;display:flex;gap:8px;">
+              <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;display:none;" id="runner-run-all-btn" onclick="runnerRunAll()">▶ Tümünü Koştur</button>
+              <a id="runner-cucumber-link" href="#" target="_blank" style="display:none;padding:4px 10px;font-size:11px;" class="btn btn-secondary">🥒 Cucumber Raporu</a>
+            </div>
+          </div>
+
+          <!-- Performance Metrics -->
+          <div id="runner-perf-section" style="display:none;">
+            <div class="code-container" style="height:auto;">
+              <div class="code-container-header">
+                <span style="font-size:13px;font-weight:600;color:#e2e8f0;">⚡ Performance Agent Metrikleri</span>
+              </div>
+              <div style="padding:16px;">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px;">
+                  <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">TOPLAM</div>
+                    <div id="pm-total" style="font-size:22px;font-weight:700;color:var(--color-info);">-</div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">GEÇTİ</div>
+                    <div id="pm-passed" style="font-size:22px;font-weight:700;color:var(--color-success);">-</div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">KALDI</div>
+                    <div id="pm-failed" style="font-size:22px;font-weight:700;color:var(--color-danger);">-</div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">ORAN</div>
+                    <div id="pm-rate" style="font-size:22px;font-weight:700;color:var(--color-accent);">-</div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">ORT. SÜRE</div>
+                    <div id="pm-avg" style="font-size:20px;font-weight:700;color:#f59e0b;">-</div>
+                  </div>
+                </div>
+                <div id="pm-insights" style="display:none;">
+                  <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Agent Önerileri</div>
+                  <ul id="pm-insights-list" style="list-style:none;display:flex;flex-direction:column;gap:6px;"></ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Test Cases Listesi -->
+          <div id="runner-cases-section" style="display:none;">
+            <div class="code-container" style="height:auto;">
+              <div class="code-container-header" style="justify-content:space-between;">
+                <span style="font-size:13px;font-weight:600;color:#e2e8f0;">🧪 Test Cases</span>
+                <span id="runner-cases-count" style="font-size:12px;color:var(--text-muted);"></span>
+              </div>
+              <div id="runner-cases-list" style="padding:8px;display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;"></div>
+            </div>
+          </div>
+
+          <!-- Response / Hata -->
+          <div id="runner-response-section" style="display:none;">
+            <div class="code-container" style="height:auto;">
+              <div class="code-container-header">
+                <span style="font-size:13px;font-weight:600;color:#e2e8f0;">📥 Response</span>
+              </div>
+              <pre class="code-content-pre" style="max-height:240px;overflow:auto;"><code id="runner-response-body" style="font-size:11px;"></code></pre>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- History Panel -->
+      <div id="runner-history-section" style="display:none;margin-top:8px;">
+        <div class="code-container" style="height:auto;">
+          <div class="code-container-header" style="justify-content:space-between;">
+            <span style="font-size:13px;font-weight:600;color:#e2e8f0;">🕐 Geçmiş İstekler</span>
+            <button class="btn btn-secondary" style="padding:3px 9px;font-size:11px;" onclick="runnerHideHistory()">Kapat</button>
+          </div>
+          <div id="runner-history-list" style="padding:8px;display:flex;flex-direction:column;gap:4px;max-height:280px;overflow-y:auto;"></div>
+        </div>
+      </div>
+
+    </div>
+
     <!-- VIEW 5: SYSTEM LOGS -->
     <div class="view-section" id="view-system-logs">
       <div class="view-header">
@@ -1059,6 +1244,8 @@
         loadRequestsForDropdown();
       } else if (viewName === 'system-logs') {
         fetchSystemLogs();
+      } else if (viewName === 'runner') {
+        runnerUpdateBodyPreview();
       }
     }
 
@@ -1085,7 +1272,7 @@
       
       const swaggerGroup = document.getElementById('group-swagger');
       const appUrlGroup = document.getElementById('group-appUrl');
-      const appPackageGroup = document.getElementById('group-appPackage');
+      
       
       frameworkSelect.innerHTML = '';
       
@@ -1093,17 +1280,13 @@
         frameworkSelect.innerHTML = '<option value="KARATE">KARATE DSL</option>';
         swaggerGroup.style.display = 'flex';
         appUrlGroup.style.display = 'none';
-        appPackageGroup.style.display = 'none';
+        
       } else if (testType === 'FRONTEND_WEB') {
         frameworkSelect.innerHTML = '<option value="SELENIUM">SELENIUM (WebDriver)</option>';
         swaggerGroup.style.display = 'none';
         appUrlGroup.style.display = 'flex';
-        appPackageGroup.style.display = 'none';
-      } else if (testType === 'MOBILE') {
-        frameworkSelect.innerHTML = '<option value="APPIUM">APPIUM (Mobile)</option>';
-        swaggerGroup.style.display = 'none';
-        appUrlGroup.style.display = 'none';
-        appPackageGroup.style.display = 'flex';
+        
+
       }
     }
 
@@ -1137,7 +1320,7 @@
         else if (req.status === 'GENERATED') statusBadge = '<span class="badge badge-success">Üretildi</span>';
         else if (req.status === 'FAILED') statusBadge = '<span class="badge badge-danger">Hata Oluştu</span>';
 
-        const endpointText = req.swaggerUrl || req.applicationUrl || req.appPackage || '-';
+        const endpointText = req.swaggerUrl || req.applicationUrl || '-';
         const formattedDate = new Date(req.createdAt).toLocaleString('tr-TR');
         
         let actionButtons = `
@@ -1231,7 +1414,7 @@
         userStory: document.getElementById('userStory').value,
         swaggerUrl: document.getElementById('swaggerUrl').value || null,
         applicationUrl: document.getElementById('applicationUrl').value || null,
-        appPackage: document.getElementById('appPackage').value || null,
+        
         additionalContext: document.getElementById('additionalContext').value || null
       };
 
@@ -1514,7 +1697,7 @@
       
       generated.forEach(r => {
         const dateStr = new Date(r.createdAt).toLocaleString('tr-TR');
-        const endpoint = r.swaggerUrl || r.applicationUrl || r.appPackage || '';
+        const endpoint = r.swaggerUrl || r.applicationUrl || '';
         const displayLabel = `${r.id} (${r.testType} - ${r.framework}) - ${dateStr} - [${endpoint}]`;
         const opt = document.createElement('option');
         opt.value = r.id;
@@ -1718,6 +1901,337 @@
         })
         .catch(() => showToast("Self-healing başarısız.", false));
     }
+
+    // ══════════════════════════════════════════════════════════
+    // RUNNER — Postman benzeri test çalıştırıcı
+    // ══════════════════════════════════════════════════════════
+
+    let runnerPollTimer = null;
+    let runnerCurrentId = null;
+
+    function runnerAdaptFramework() {
+      const type = document.getElementById('runner-testType').value;
+      const fw   = document.getElementById('runner-framework');
+      const swagger  = document.getElementById('runner-group-swagger');
+      const appUrl   = document.getElementById('runner-group-appUrl');
+      
+
+      fw.innerHTML = '';
+      if (type === 'BACKEND_API') {
+        fw.innerHTML = '<option value="KARATE">KARATE</option>';
+        swagger.style.display = ''; appUrl.style.display = 'none'; 
+      } else if (type === 'FRONTEND_WEB') {
+        fw.innerHTML = '<option value="SELENIUM">SELENIUM</option>';
+        swagger.style.display = 'none'; appUrl.style.display = ''; 
+
+      }
+      runnerUpdateBodyPreview();
+    }
+
+    function runnerBuildPayload() {
+      return {
+        testType:          document.getElementById('runner-testType').value,
+        framework:         document.getElementById('runner-framework').value,
+        userStory:         document.getElementById('runner-userStory').value || null,
+        swaggerUrl:        document.getElementById('runner-swaggerUrl').value || null,
+        applicationUrl:    document.getElementById('runner-applicationUrl').value || null,
+        
+        additionalContext: document.getElementById('runner-additionalContext').value || null
+      };
+    }
+
+    function runnerPayloadToXml(obj) {
+      let xml = '<testGenerationRequest>\n';
+      for (const [k, v] of Object.entries(obj)) {
+        if (v !== null && v !== undefined && v !== '') {
+          xml += `  <${k}>${escXml(String(v))}</${k}>\n`;
+        }
+      }
+      xml += '</testGenerationRequest>';
+      return xml;
+    }
+
+    function escXml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function runnerUpdateBodyPreview() {
+      const fmt  = document.getElementById('runner-format').value;
+      const obj  = runnerBuildPayload();
+      const label = document.getElementById('runner-body-label');
+      const pre   = document.getElementById('runner-body-preview');
+      if (fmt === 'xml') {
+        label.textContent = '📄 Request Body (XML)';
+        pre.textContent   = runnerPayloadToXml(obj);
+      } else {
+        label.textContent = '📄 Request Body (JSON)';
+        pre.textContent   = JSON.stringify(obj, null, 2);
+      }
+    }
+
+    function runnerCopyBody() {
+      const text = document.getElementById('runner-body-preview').textContent;
+      navigator.clipboard.writeText(text);
+      showToast('Body kopyalandı.', true);
+    }
+
+    function runnerClearForm() {
+      ['runner-swaggerUrl','runner-applicationUrl',
+       'runner-userStory','runner-additionalContext'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('runner-testType').value = 'BACKEND_API';
+      runnerAdaptFramework();
+      runnerHideResults();
+    }
+
+    function runnerHideResults() {
+      ['runner-status-bar','runner-perf-section','runner-cases-section','runner-response-section']
+        .forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
+      if (runnerPollTimer) { clearInterval(runnerPollTimer); runnerPollTimer = null; }
+    }
+
+    async function runnerSend() {
+      runnerHideResults();
+      const fmt     = document.getElementById('runner-format').value;
+      const autoRun = document.getElementById('runner-autoRun').checked;
+      const payload = runnerBuildPayload();
+      const btn     = document.getElementById('runner-send-btn');
+
+      const contentType = fmt === 'xml' ? 'application/xml' : 'application/json';
+      const body        = fmt === 'xml' ? runnerPayloadToXml(payload) : JSON.stringify(payload);
+
+      btn.disabled = true;
+      btn.textContent = '⏳ Gönderiliyor...';
+
+      try {
+        const res  = await fetch(`/api/v1/tests/generate?autoRun=${autoRun}`, {
+          method: 'POST',
+          headers: { 'Content-Type': contentType, 'Accept': 'application/json' },
+          body
+        });
+        const data = await res.json();
+
+        document.getElementById('runner-response-section').style.display = '';
+        document.getElementById('runner-response-body').textContent = JSON.stringify(data, null, 2);
+
+        if (data.requestId) {
+          runnerCurrentId = data.requestId;
+          runnerShowStatusBar(data.requestId, data.status || 'PENDING');
+          runnerStartPolling(data.requestId);
+        }
+      } catch(e) {
+        document.getElementById('runner-response-section').style.display = '';
+        document.getElementById('runner-response-body').textContent = 'Hata: ' + e.message;
+        showToast('Request gönderilemedi: ' + e.message, false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '▶ Gönder';
+      }
+    }
+
+    function runnerShowStatusBar(requestId, status) {
+      const bar   = document.getElementById('runner-status-bar');
+      const badge = document.getElementById('runner-status-badge');
+      const idEl  = document.getElementById('runner-request-id-display');
+      bar.style.display   = 'flex';
+      idEl.textContent    = 'ID: ' + requestId;
+      runnerSetStatusBadge(badge, status);
+    }
+
+    function runnerSetStatusBadge(badge, status) {
+      const styles = {
+        PENDING:    ['rgba(99,102,241,0.15)','#6366f1'],
+        GENERATING: ['rgba(245,158,11,0.15)','#f59e0b'],
+        GENERATED:  ['rgba(16,185,129,0.15)','#10b981'],
+        FAILED:     ['rgba(239,68,68,0.15)', '#ef4444']
+      };
+      const [bg, color] = styles[status] || styles['PENDING'];
+      badge.style.background = bg;
+      badge.style.color      = color;
+      badge.textContent      = status;
+    }
+
+    function runnerStartPolling(requestId) {
+      if (runnerPollTimer) clearInterval(runnerPollTimer);
+      runnerPollTimer = setInterval(async () => {
+        try {
+          const res  = await fetch('/api/v1/tests/' + requestId, { headers: { 'Accept': 'application/json' } });
+          const data = await res.json();
+          const badge = document.getElementById('runner-status-badge');
+          runnerSetStatusBadge(badge, data.status);
+
+          if (data.status === 'GENERATED' || data.status === 'FAILED') {
+            clearInterval(runnerPollTimer);
+            runnerPollTimer = null;
+            await runnerLoadResults(requestId);
+          }
+        } catch(e) { /* polling, hataları yoksay */ }
+      }, 2500);
+    }
+
+    async function runnerLoadResults(requestId) {
+      // Test cases
+      try {
+        const res   = await fetch('/api/v1/tests/' + requestId + '/cases', { headers: { 'Accept': 'application/json' } });
+        const cases = await res.json();
+        runnerRenderCases(cases, requestId);
+      } catch(e) {}
+
+      // Performance metrics
+      try {
+        const res  = await fetch('/api/v1/tests/' + requestId + '/performance-metrics', { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        runnerRenderPerformance(data);
+      } catch(e) {}
+
+      // Cucumber rapor linki
+      const link = document.getElementById('runner-cucumber-link');
+      link.href  = '/reports/cucumber/' + requestId;
+      link.style.display = '';
+
+      // Run-all butonu
+      document.getElementById('runner-run-all-btn').style.display = '';
+    }
+
+    function runnerRenderCases(cases, requestId) {
+      const section = document.getElementById('runner-cases-section');
+      const list    = document.getElementById('runner-cases-list');
+      const count   = document.getElementById('runner-cases-count');
+      section.style.display = '';
+      count.textContent = cases.length + ' test case';
+
+      list.innerHTML = cases.map(tc => {
+        const statusColor = {
+          PASSED: '#10b981', FAILED: '#ef4444', NOT_RUN: '#64748b',
+          RUNNING: '#3b82f6', SKIPPED: '#64748b'
+        }[tc.runStatus] || '#64748b';
+        const icon = { PASSED:'✓', FAILED:'✗', NOT_RUN:'○', RUNNING:'⟳', SKIPPED:'⊘' }[tc.runStatus] || '○';
+        const dur  = tc.executionTimeMs != null ? (tc.executionTimeMs/1000).toFixed(2)+'s' : '-';
+
+        return `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 14px;
+                     display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .2s;"
+                     onmouseenter="this.style.background='rgba(255,255,255,0.07)'"
+                     onmouseleave="this.style.background='rgba(255,255,255,0.04)'"
+                     onclick="runnerExpandCase(this, '${tc.id}')">
+          <span style="font-size:16px;color:${statusColor};font-weight:700;">${icon}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(tc.testName)}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${tc.framework} · ${tc.fileName || ''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:12px;font-weight:700;color:${statusColor};">${tc.runStatus}</div>
+            <div style="font-size:11px;color:var(--text-muted);">${dur}</div>
+          </div>
+        </div>
+        <div id="case-expand-${tc.id}" style="display:none;background:var(--bg-input);border-radius:8px;padding:10px;margin-top:-4px;">
+          <pre style="font-size:11px;color:#adbac7;font-family:'JetBrains Mono',monospace;white-space:pre-wrap;max-height:260px;overflow:auto;">${escHtml(tc.testContent || '')}</pre>
+        </div>`;
+      }).join('');
+    }
+
+    function runnerExpandCase(el, caseId) {
+      const expand = document.getElementById('case-expand-' + caseId);
+      if (!expand) return;
+      expand.style.display = expand.style.display === 'none' ? '' : 'none';
+    }
+
+    function runnerRenderPerformance(data) {
+      const section = document.getElementById('runner-perf-section');
+      section.style.display = '';
+      const stats = data.executionStats || {};
+      document.getElementById('pm-total').textContent  = stats.totalTestCases ?? '-';
+      document.getElementById('pm-passed').textContent = stats.passedCount ?? '-';
+      document.getElementById('pm-failed').textContent = stats.failedCount ?? '-';
+      document.getElementById('pm-rate').textContent   = stats.passRate ?? '-';
+      document.getElementById('pm-avg').textContent    = stats.avgExecutionMs != null ? stats.avgExecutionMs + 'ms' : '-';
+
+      const insights = data.agentInsights || [];
+      if (insights.length > 0) {
+        const insDiv  = document.getElementById('pm-insights');
+        const insList = document.getElementById('pm-insights-list');
+        insDiv.style.display = '';
+        insList.innerHTML = insights.map(i =>
+          `<li style="font-size:12px;color:var(--text-muted);padding:6px 10px;background:rgba(255,255,255,0.04);border-radius:6px;border-left:3px solid var(--color-accent);">⚡ ${escHtml(i)}</li>`
+        ).join('');
+      }
+    }
+
+    async function runnerRunAll() {
+      if (!runnerCurrentId) return;
+      try {
+        await fetch('/api/v1/tests/' + runnerCurrentId + '/run-all', { method: 'POST' });
+        showToast('Tüm testler başlatıldı. Cucumber raporu hazırlanıyor...', true);
+        runnerStartPolling(runnerCurrentId);
+      } catch(e) {
+        showToast('Koşum başlatılamadı: ' + e.message, false);
+      }
+    }
+
+    async function runnerLoadHistory() {
+      const section = document.getElementById('runner-history-section');
+      const list    = document.getElementById('runner-history-list');
+      section.style.display = '';
+
+      try {
+        const res  = await fetch('/api/v1/tests', { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : (data.content || []);
+
+        list.innerHTML = items.slice(0, 30).map(r => {
+          const statusColor = { GENERATED:'#10b981', FAILED:'#ef4444', GENERATING:'#f59e0b', PENDING:'#6366f1' }[r.status] || '#64748b';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;
+                       background:rgba(255,255,255,0.03);"
+                       onmouseenter="this.style.background='rgba(255,255,255,0.07)'"
+                       onmouseleave="this.style.background='rgba(255,255,255,0.03)'"
+                       onclick="runnerLoadFromHistory('${r.id}')">
+            <span style="width:8px;height:8px;border-radius:50%;background:${statusColor};flex-shrink:0;"></span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-family:'JetBrains Mono',monospace;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.id}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${r.framework} · ${r.testType} · ${r.status}</div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);flex-shrink:0;">${r.createdAt ? r.createdAt.substring(0,16).replace('T',' ') : ''}</div>
+          </div>`;
+        }).join('');
+      } catch(e) {
+        list.innerHTML = '<div style="color:var(--text-muted);padding:8px;">Geçmiş yüklenemedi.</div>';
+      }
+    }
+
+    async function runnerLoadFromHistory(requestId) {
+      runnerHideResults();
+      runnerCurrentId = requestId;
+      runnerShowStatusBar(requestId, 'LOADING...');
+      document.getElementById('runner-history-section').style.display = 'none';
+      await runnerLoadResults(requestId);
+      // Statüyü de güncelle
+      try {
+        const res  = await fetch('/api/v1/tests/' + requestId, { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        runnerSetStatusBadge(document.getElementById('runner-status-badge'), data.status);
+      } catch(e) {}
+    }
+
+    function runnerHideHistory() {
+      document.getElementById('runner-history-section').style.display = 'none';
+    }
+
+    function escHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Body preview'ı form değişikliklerinde otomatik güncelle
+    document.addEventListener('DOMContentLoaded', () => {
+      ['runner-testType','runner-framework','runner-swaggerUrl','runner-applicationUrl',
+       'runner-userStory','runner-additionalContext','runner-format']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', runnerUpdateBodyPreview);
+        if (el) el.addEventListener('change', runnerUpdateBodyPreview);
+      });
+      runnerUpdateBodyPreview();
+    });
 
     // Toast alert popups
     function showToast(message, isSuccess) {

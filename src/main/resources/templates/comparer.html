@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Test Generator - Endpoint Comparer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-base: #060913;
+      --bg-surface: #0b1120;
+      --bg-card: #111a2e;
+      --bg-input: #090e1a;
+      --border-color: rgba(255, 255, 255, 0.08);
+
+      --color-primary: #6366f1;
+      --color-primary-hover: #4f46e5;
+      --color-primary-glow: rgba(99, 102, 241, 0.15);
+      --color-accent: #a855f7;
+      --color-accent-glow: rgba(168, 85, 247, 0.15);
+
+      --color-success: #10b981;
+      --color-success-glow: rgba(16, 185, 129, 0.15);
+      --color-danger: #ef4444;
+      --color-danger-glow: rgba(239, 68, 68, 0.15);
+      --color-warning: #f59e0b;
+      --color-warning-glow: rgba(245, 158, 11, 0.15);
+      --color-info: #3b82f6;
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+
+      --shadow-premium: 0 12px 40px -10px rgba(0, 0, 0, 0.6);
+      --transition-base: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      line-height: 1.5;
+      overflow-x: hidden;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-base); }
+    ::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+
+    /* ── Sidebar ─────────────────────────────── */
+    .sidebar {
+      width: 280px;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .logo-area {
+      padding: 32px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .logo-icon { font-size: 28px; }
+
+    .logo-text {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 20px;
+      background: linear-gradient(135deg, #fff 0%, var(--color-accent) 50%, var(--color-primary) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-links { padding: 24px 16px; display: flex; flex-direction: column; gap: 6px; flex-grow: 1; }
+
+    .nav-link {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: var(--transition-base);
+      text-decoration: none;
+    }
+
+    .nav-link:hover { background: rgba(255, 255, 255, 0.04); color: var(--text-main); }
+
+    .nav-link.active {
+      background: var(--color-primary-glow);
+      color: var(--color-primary);
+    }
+
+    .sidebar-footer { padding: 24px; border-top: 1px solid var(--border-color); }
+    .health-indicator { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+    .health-indicator .dot { width: 8px; height: 8px; background: var(--color-success); border-radius: 50%; box-shadow: 0 0 10px var(--color-success); }
+
+    /* ── Main ────────────────────────────────── */
+    .main-content {
+      flex-grow: 1;
+      padding: 32px;
+      height: 100vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .page-header h1 { font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 700; }
+    .page-header p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-premium);
+    }
+
+    .card h2 { font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 700; margin-bottom: 16px; display:flex; align-items:center; gap:8px;}
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .form-group label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+
+    .form-control {
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--text-main);
+      font-size: 14px;
+      font-family: inherit;
+      transition: var(--transition-base);
+      width: 100%;
+    }
+    .form-control:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-glow); }
+    textarea.form-control { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; resize: vertical; }
+
+    .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+    .checkbox-row input { accent-color: var(--color-primary); width: 15px; height: 15px; }
+
+    /* ── Tabs ────────────────────────────────── */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-color); margin-bottom: 18px; }
+    .tab {
+      padding: 10px 18px; cursor: pointer; font-size: 14px; font-weight: 600;
+      color: var(--text-muted); border-bottom: 2px solid transparent; transition: var(--transition-base);
+    }
+    .tab:hover { color: var(--text-main); }
+    .tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+
+    /* ── Buttons ─────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 11px 22px; border: none; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer;
+      transition: var(--transition-base);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+      color: #fff;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -6px var(--color-primary-glow); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border-color); color: var(--text-muted);
+      padding: 8px 14px; font-size: 13px;
+    }
+    .btn-ghost:hover { color: var(--text-main); border-color: var(--color-primary); }
+
+    /* ── Manual request rows ─────────────────── */
+    .req-row {
+      display: grid;
+      grid-template-columns: 110px 1fr 1fr 36px;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: start;
+    }
+    .req-row .sub { grid-column: 2 / 4; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .req-remove {
+      background: transparent; border: 1px solid var(--border-color); color: var(--text-dim);
+      border-radius: var(--radius-sm); cursor: pointer; height: 40px; font-size: 16px;
+    }
+    .req-remove:hover { color: var(--color-danger); border-color: var(--color-danger); }
+
+    select.form-control { appearance: none; }
+
+    /* ── Summary stats ───────────────────────── */
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .stat-card {
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg); padding: 20px; text-align: center;
+    }
+    .stat-card .value { font-family: 'Outfit', sans-serif; font-size: 30px; font-weight: 800; }
+    .stat-card .label { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; font-weight: 600; }
+    .stat-card.identical .value { color: var(--color-success); }
+    .stat-card.different .value { color: var(--color-warning); }
+    .stat-card.errors .value { color: var(--color-danger); }
+
+    /* ── Result rows ─────────────────────────── */
+    .result-item {
+      border: 1px solid var(--border-color); border-radius: var(--radius-md);
+      margin-bottom: 12px; overflow: hidden; background: var(--bg-surface);
+    }
+    .result-header {
+      display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer;
+      transition: var(--transition-base); flex-wrap: wrap;
+    }
+    .result-header:hover { background: rgba(255,255,255,0.03); }
+    .result-name { font-weight: 700; font-size: 14px; flex-grow: 1; min-width: 200px; }
+    .result-name .path { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 400; margin-left: 8px;}
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .badge.match { background: var(--color-success-glow); color: var(--color-success); }
+    .badge.diff  { background: var(--color-warning-glow); color: var(--color-warning); }
+    .badge.error { background: var(--color-danger-glow); color: var(--color-danger); }
+    .badge.status { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+    .badge.latency { background: var(--color-primary-glow); color: var(--color-primary); }
+
+    .result-body { border-top: 1px solid var(--border-color); padding: 18px; display: none; }
+    .result-item.open .result-body { display: block; }
+
+    .diff-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .diff-table th {
+      text-align: left; padding: 8px 12px; color: var(--text-dim);
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .diff-table td {
+      padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-family: 'JetBrains Mono', monospace; vertical-align: top; word-break: break-all;
+    }
+    .diff-table td.path { color: var(--color-accent); white-space: nowrap; }
+    .diff-table td.type { white-space: nowrap; }
+    .diff-table td.val-a { color: #fda4af; }
+    .diff-table td.val-b { color: #86efac; }
+
+    .body-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+    .body-pane { background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
+    .body-pane .pane-title { padding: 8px 12px; font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border-color); }
+    .body-pane pre {
+      padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+      max-height: 320px; overflow: auto; color: var(--text-muted); white-space: pre-wrap; word-break: break-all;
+    }
+
+    .error-note { padding: 10px 14px; border-radius: var(--radius-sm); background: var(--color-danger-glow); color: var(--color-danger); font-size: 13px; margin-bottom: 10px; font-family: 'JetBrains Mono', monospace;}
+
+    .hidden { display: none !important; }
+
+    .spinner {
+      width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; padding: 14px 20px;
+      background: var(--bg-card); border: 1px solid var(--color-danger);
+      color: var(--color-danger); border-radius: var(--radius-md); font-size: 13.5px;
+      box-shadow: var(--shadow-premium); z-index: 100; max-width: 420px;
+    }
+
+    .collection-info { font-size: 13px; color: var(--text-muted); margin-top: 8px; }
+    .collection-info.ok { color: var(--color-success); }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .grid-2, .summary-grid, .body-compare { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="logo-area">
+      <span class="logo-icon">🤖</span>
+      <span class="logo-text">AI Test Gen</span>
+    </div>
+
+    <div class="nav-links">
+      <a class="nav-link" href="/">
+        <span>📋</span> Dashboard
+      </a>
+      <a class="nav-link active" href="/comparer">
+        <span>⚖️</span> Endpoint Comparer
+      </a>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="health-indicator">
+        <span class="dot"></span> Sistem Aktif
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main-content">
+    <div class="page-header">
+      <h1>⚖️ Endpoint Comparer</h1>
+      <p>Aynı isteği iki farklı ortama (legacy/yeni, staging/prod) paralel gönderin; status, JSON gövde ve gecikme farklarını alan bazında görün.</p>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="card">
+      <h2>🌐 Hedef Ortamlar</h2>
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="baseUrlA">Base URL A (referans)</label>
+          <input class="form-control" type="text" id="baseUrlA" placeholder="https://legacy.example.com">
+        </div>
+        <div class="form-group">
+          <label for="baseUrlB">Base URL B (karşılaştırılan)</label>
+          <input class="form-control" type="text" id="baseUrlB" placeholder="https://new.example.com">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="ignoreFields">Yok sayılacak alanlar (virgülle: timestamp, /data/id)</label>
+          <input class="form-control" type="text" id="ignoreFields" placeholder="timestamp, requestId, traceId">
+        </div>
+        <div class="form-group">
+          <label for="timeoutSeconds">Timeout (saniye)</label>
+          <input class="form-control" type="number" id="timeoutSeconds" value="30" min="1" max="120">
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="compareHeaders">
+        <label for="compareHeaders">Header'ları da karşılaştır (değişken header'lar otomatik hariç tutulur)</label>
+      </div>
+    </div>
+
+    <!-- REQUESTS -->
+    <div class="card">
+      <h2>📨 İstekler</h2>
+      <div class="tabs">
+        <div class="tab active" id="tab-manual" onclick="switchTab('manual')">Manuel İstekler</div>
+        <div class="tab" id="tab-collection" onclick="switchTab('collection')">Postman Collection</div>
+      </div>
+
+      <!-- Manual -->
+      <div id="pane-manual">
+        <div id="manual-requests"></div>
+        <button class="btn btn-ghost" onclick="addRequestRow()">+ İstek Ekle</button>
+      </div>
+
+      <!-- Collection -->
+      <div id="pane-collection" class="hidden">
+        <div class="form-group">
+          <label for="collectionJson">Postman Collection v2.x JSON içeriğini yapıştırın</label>
+          <textarea class="form-control" id="collectionJson" rows="10" placeholder='{ "info": {...}, "item": [ ... ] }'></textarea>
+        </div>
+        <button class="btn btn-ghost" onclick="previewCollection()">🔍 Önizle</button>
+        <div class="collection-info" id="collection-info"></div>
+      </div>
+    </div>
+
+    <div>
+      <button class="btn btn-primary" id="run-btn" onclick="runComparison()">
+        <span id="run-label">⚖️ Karşılaştırmayı Başlat</span>
+      </button>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="results-section" class="hidden">
+      <div class="summary-grid" style="margin-bottom: 20px;">
+        <div class="stat-card"><div class="value" id="stat-total">0</div><div class="label">Toplam İstek</div></div>
+        <div class="stat-card identical"><div class="value" id="stat-identical">0</div><div class="label">Birebir Aynı</div></div>
+        <div class="stat-card different"><div class="value" id="stat-different">0</div><div class="label">Farklı</div></div>
+        <div class="stat-card errors"><div class="value" id="stat-errors">0</div><div class="label">Hata</div></div>
+      </div>
+      <div class="card">
+        <h2>📊 Sonuçlar <span id="run-meta" style="font-size:12px; color: var(--text-dim); font-weight:400;"></span></h2>
+        <div id="results-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Tab yönetimi ─────────────────────────────
+    function switchTab(tab) {
+      document.getElementById('tab-manual').classList.toggle('active', tab === 'manual');
+      document.getElementById('tab-collection').classList.toggle('active', tab === 'collection');
+      document.getElementById('pane-manual').classList.toggle('hidden', tab !== 'manual');
+      document.getElementById('pane-collection').classList.toggle('hidden', tab !== 'collection');
+    }
+
+    // ── Manuel istek satırları ───────────────────
+    let rowSeq = 0;
+
+    function addRequestRow(preset) {
+      const id = ++rowSeq;
+      const row = document.createElement('div');
+      row.className = 'req-row';
+      row.id = 'req-row-' + id;
+      row.innerHTML = `
+        <select class="form-control" id="req-method-${id}">
+          <option>GET</option><option>POST</option><option>PUT</option>
+          <option>PATCH</option><option>DELETE</option><option>HEAD</option>
+        </select>
+        <input class="form-control" id="req-path-${id}" placeholder="/api/v1/pets?limit=10">
+        <input class="form-control" id="req-name-${id}" placeholder="İstek adı (opsiyonel)">
+        <button class="req-remove" onclick="document.getElementById('req-row-${id}').remove()" title="Kaldır">✕</button>
+        <div class="sub">
+          <textarea class="form-control" id="req-headers-${id}" rows="2" placeholder='Header (JSON): {"Authorization": "Bearer ..."}'></textarea>
+          <textarea class="form-control" id="req-body-${id}" rows="2" placeholder='Body (POST/PUT için): {"name": "Boncuk"}'></textarea>
+        </div>`;
+      document.getElementById('manual-requests').appendChild(row);
+      if (preset) {
+        document.getElementById('req-method-' + id).value = preset.method || 'GET';
+        document.getElementById('req-path-' + id).value = preset.path || '';
+      }
+    }
+
+    function collectManualRequests() {
+      const rows = document.querySelectorAll('#manual-requests .req-row');
+      const requests = [];
+      for (const row of rows) {
+        const id = row.id.replace('req-row-', '');
+        const path = document.getElementById('req-path-' + id).value.trim();
+        if (!path) continue;
+
+        let headers = null;
+        const headersRaw = document.getElementById('req-headers-' + id).value.trim();
+        if (headersRaw) {
+          try { headers = JSON.parse(headersRaw); }
+          catch (e) { throw new Error('İstek #' + id + ' header alanı geçerli JSON değil.'); }
+        }
+
+        requests.push({
+          name: document.getElementById('req-name-' + id).value.trim() || null,
+          method: document.getElementById('req-method-' + id).value,
+          path: path,
+          headers: headers,
+          body: document.getElementById('req-body-' + id).value.trim() || null
+        });
+      }
+      return requests;
+    }
+
+    // ── Collection önizleme ──────────────────────
+    async function previewCollection() {
+      const info = document.getElementById('collection-info');
+      const json = document.getElementById('collectionJson').value.trim();
+      info.className = 'collection-info';
+      if (!json) { info.textContent = 'Önce collection JSON yapıştırın.'; return; }
+      try {
+        const resp = await fetch('/api/v1/comparison/parse-collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ collectionJson: json })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Parse hatası');
+        if (data.requestCount === 0) {
+          info.textContent = '⚠️ Collection içinde istek bulunamadı. Postman v2.x formatında olduğundan emin olun.';
+        } else {
+          info.className = 'collection-info ok';
+          info.textContent = '✓ ' + data.requestCount + ' istek bulundu: '
+            + data.requests.slice(0, 8).map(r => r.method + ' ' + r.path).join('  ·  ')
+            + (data.requestCount > 8 ? ' …' : '');
+        }
+      } catch (e) {
+        info.textContent = '✗ ' + e.message;
+      }
+    }
+
+    // ── Koşum ────────────────────────────────────
+    async function runComparison() {
+      const btn = document.getElementById('run-btn');
+      const label = document.getElementById('run-label');
+
+      const baseUrlA = document.getElementById('baseUrlA').value.trim();
+      const baseUrlB = document.getElementById('baseUrlB').value.trim();
+      if (!baseUrlA || !baseUrlB) { showToast('Her iki Base URL de zorunludur.'); return; }
+
+      let requests;
+      try { requests = collectManualRequests(); }
+      catch (e) { showToast(e.message); return; }
+
+      const collectionJson = document.getElementById('collectionJson').value.trim() || null;
+      if (requests.length === 0 && !collectionJson) {
+        showToast('En az bir manuel istek ekleyin veya Postman collection yapıştırın.');
+        return;
+      }
+
+      const ignoreFieldsRaw = document.getElementById('ignoreFields').value.trim();
+      const payload = {
+        baseUrlA, baseUrlB,
+        requests: requests.length > 0 ? requests : null,
+        collectionJson: collectionJson,
+        ignoreFields: ignoreFieldsRaw ? ignoreFieldsRaw.split(',').map(s => s.trim()).filter(Boolean) : null,
+        compareHeaders: document.getElementById('compareHeaders').checked,
+        timeoutSeconds: parseInt(document.getElementById('timeoutSeconds').value) || 30
+      };
+
+      btn.disabled = true;
+      label.innerHTML = '<span class="spinner"></span> Karşılaştırılıyor…';
+
+      try {
+        const resp = await fetch('/api/v1/comparison/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Karşılaştırma başarısız');
+        renderResults(data);
+      } catch (e) {
+        showToast('✗ ' + e.message);
+      } finally {
+        btn.disabled = false;
+        label.textContent = '⚖️ Karşılaştırmayı Başlat';
+      }
+    }
+
+    // ── Sonuç render ─────────────────────────────
+    const TYPE_LABELS = {
+      VALUE_MISMATCH: '≠ Değer farklı',
+      TYPE_MISMATCH: '⚠ Tip farklı',
+      MISSING_IN_A: '− A tarafında yok',
+      MISSING_IN_B: '− B tarafında yok',
+      ARRAY_LENGTH_MISMATCH: '# Dizi uzunluğu'
+    };
+
+    function esc(s) {
+      return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function renderResults(data) {
+      document.getElementById('results-section').classList.remove('hidden');
+      document.getElementById('stat-total').textContent = data.summary.totalRequests;
+      document.getElementById('stat-identical').textContent = data.summary.identicalCount;
+      document.getElementById('stat-different').textContent = data.summary.differentCount;
+      document.getElementById('stat-errors').textContent = data.summary.errorCount;
+      document.getElementById('run-meta').textContent =
+        '— ' + data.totalDurationMs + 'ms · A: ' + data.baseUrlA + ' · B: ' + data.baseUrlB;
+
+      const list = document.getElementById('results-list');
+      list.innerHTML = '';
+
+      data.results.forEach((r, idx) => {
+        const isError = r.errorA || r.errorB;
+        const isIdentical = !isError && r.statusMatch && r.bodyMatch
+          && (!r.headerDifferences || r.headerDifferences.length === 0);
+
+        const stateBadge = isError
+          ? '<span class="badge error">HATA</span>'
+          : isIdentical
+            ? '<span class="badge match">AYNI</span>'
+            : '<span class="badge diff">' + ((r.differences ? r.differences.length : 0)
+                + (r.headerDifferences ? r.headerDifferences.length : 0)
+                + (!r.statusMatch ? 1 : 0)) + ' FARK</span>';
+
+        const statusBadge = '<span class="badge status">' + (r.statusA ?? '—') + ' / ' + (r.statusB ?? '—') + '</span>';
+        const latencyBadge = '<span class="badge latency">' + r.latencyAMs + 'ms / ' + r.latencyBMs + 'ms</span>';
+
+        let bodyHtml = '';
+        if (r.errorA) bodyHtml += '<div class="error-note">A: ' + esc(r.errorA) + '</div>';
+        if (r.errorB) bodyHtml += '<div class="error-note">B: ' + esc(r.errorB) + '</div>';
+
+        if (!r.statusMatch && !isError) {
+          bodyHtml += '<div class="error-note">HTTP status farklı: A=' + r.statusA + ', B=' + r.statusB + '</div>';
+        }
+
+        const allDiffs = [...(r.differences || []), ...(r.headerDifferences || [])];
+        if (allDiffs.length > 0) {
+          bodyHtml += `<table class="diff-table">
+            <thead><tr><th>Alan (JSON Pointer)</th><th>Fark Tipi</th><th>A Değeri</th><th>B Değeri</th></tr></thead>
+            <tbody>` +
+            allDiffs.map(d => `<tr>
+              <td class="path">${esc(d.path)}</td>
+              <td class="type">${TYPE_LABELS[d.type] || esc(d.type)}</td>
+              <td class="val-a">${esc(d.valueA ?? '∅')}</td>
+              <td class="val-b">${esc(d.valueB ?? '∅')}</td>
+            </tr>`).join('') +
+            '</tbody></table>';
+        }
+
+        if (!isError && (r.bodyA || r.bodyB)) {
+          bodyHtml += `<div class="body-compare">
+            <div class="body-pane"><div class="pane-title">Yanıt A</div><pre>${esc(pretty(r.bodyA))}</pre></div>
+            <div class="body-pane"><div class="pane-title">Yanıt B</div><pre>${esc(pretty(r.bodyB))}</pre></div>
+          </div>`;
+        }
+
+        if (!bodyHtml) bodyHtml = '<div style="color: var(--text-dim); font-size: 13px;">Fark bulunamadı — yanıtlar birebir aynı.</div>';
+
+        const item = document.createElement('div');
+        item.className = 'result-item';
+        item.innerHTML = `
+          <div class="result-header" onclick="this.parentElement.classList.toggle('open')">
+            <div class="result-name">${esc(r.name)}<span class="path">${esc(r.method)} ${esc(r.path)}</span></div>
+            ${statusBadge} ${latencyBadge} ${stateBadge}
+          </div>
+          <div class="result-body">${bodyHtml}</div>`;
+        list.appendChild(item);
+      });
+
+      document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function pretty(body) {
+      if (!body) return '(boş yanıt)';
+      try { return JSON.stringify(JSON.parse(body), null, 2); }
+      catch (e) { return body; }
+    }
+
+    function showToast(message) {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 5000);
+    }
+
+    // İlk satırı hazır aç
+    addRequestRow();
+  </script>
+</body>
+</html>

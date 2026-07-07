@@ -1,5 +1,8 @@
 package com.testgen.controller;
 
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import com.testgen.model.GeneratedTestCase;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestRunStatus;
@@ -7,6 +10,7 @@ import com.testgen.model.TestRunStatus;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@JacksonXmlRootElement(localName = "generatedTestCase")
 public record GeneratedTestCaseResponseDto(
         String id,
         String requestId,
