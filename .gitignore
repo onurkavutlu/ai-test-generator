@@ -20,9 +20,11 @@ target/
 # Env (API key'leri commit etme!)
 .env
 
-# Test output
+# Test output — uygulamanın ürettiği testler ve koşum raporları (runtime artifact)
 /tmp/
 generated-tests/
+selenium_tests/
+surefire-reports/
 
 # OS
 .DS_Store
