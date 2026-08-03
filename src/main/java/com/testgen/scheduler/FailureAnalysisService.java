@@ -87,17 +87,19 @@ public class FailureAnalysisService {
 
             String cleanContent = failedCase.getFramework() == TestFramework.KARATE
                     ? CodeCleaner.cleanFeatureContent(llmRaw)
-                    : CodeCleaner.cleanJavaContent(llmRaw);
+                    // Java: dosya adı korunuyor → class adı da dosya adıyla eşitlenmeli (javac kuralı)
+                    : CodeCleaner.normalizeGeneratedJavaTest(
+                            CodeCleaner.cleanJavaContent(llmRaw), failedCase.getTestName());
 
             if (cleanContent.isBlank()) {
                 log.warn("LLM boş içerik döndürdü — failedCase: {}", failedCase.getTestName());
                 return null;
             }
 
-            // Suffix ile ayırt et: aynı isim diskteki orijinal test dosyasının üzerine yazılmasına yol açar
-            String newName = failedCase.getTestName().replaceAll("_Fixed_v\\d+$", "")
-                    + "_Fixed_v" + nextVersion;
-            String ext = failedCase.getFramework() == TestFramework.KARATE ? ".feature" : ".java";
+            // Orijinal dosyanın üzerine yazmak istiyoruz, aksi takdirde diskte hem bozuk eski dosya
+            // hem de yeni dosya kalır ve TestRunner ikisini de çalıştırır. Ayrıca Java'da dosya adı
+            // değişirse içindeki 'public class' adıyla uyuşmaz ve derleme hatası verir.
+            String newName = failedCase.getTestName();
 
             // Orijinal case'i supersede edilmiş olarak işaretle + heal count artır
             failedCase.setSuperseded(true);
@@ -107,11 +109,11 @@ public class FailureAnalysisService {
             // Ders çıkar: aynı servise sonraki üretimlerde bu hata varsayımı tekrarlanmasın
             agentLearningService.recordSelfHeal(request, failedCase, nextVersion);
 
-            log.info("✅ SELF-HEALING BAŞARILI v{}: {} → {}", nextVersion, failedCase.getTestName(), newName);
+            log.info("✅ SELF-HEALING BAŞARILI v{}: {} (Orijinal dosyanın üzerine yazılacak)", nextVersion, failedCase.getTestName());
 
             return GeneratedTestCase.builder()
                     .testName(newName)
-                    .fileName(newName + ext)
+                    .fileName(failedCase.getFileName())
                     .testContent(cleanContent)
                     .testSummary("[AUTO-FIX][v" + nextVersion + "] "
                             + failedCase.getTestName() + " başarısız olduğu için LLM tarafından yeniden üretildi.")

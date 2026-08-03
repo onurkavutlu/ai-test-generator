@@ -187,6 +187,12 @@ public class AiAgentOrchestratorService {
             }
         }
 
+        if (request.getAdditionalContext() != null
+                && request.getAdditionalContext().contains("## OBSERVED")) {
+            plan.append("- NOT: Bağlamda OBSERVED (gözlem) bölümü var — kontrat, hedeften canlı toplanan ")
+                .append("GERÇEK veridir (yanıt/sayfa/endpoint probları). Tüm ajanlar analiz ve assertion ")
+                .append("önerilerini YALNIZCA bu gözlemlere dayandırmalı; gözlenmeyen alan/status/selector uydurulmamalı.\n");
+        }
         plan.append("- EN SON: askReportAgent (tüm çıktılar toplandıktan sonra, bir kez).\n");
         plan.append("- KURAL: Aynı ajanı birden fazla kez çağırma. GEREKSİZ işaretli ajanları çağırma.");
         return plan.toString();

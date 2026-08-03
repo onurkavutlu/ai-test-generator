@@ -41,6 +41,9 @@ public class TestRunnerServiceTest {
 
     @Mock
     private com.testgen.service.AgentLearningService agentLearningService;
+
+    @Mock
+    private com.testgen.service.TestSuiteService testSuiteService;
     @InjectMocks
     private TestRunnerService testRunnerService;
 

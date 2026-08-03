@@ -318,14 +318,14 @@ public class TestGenerationController {
 
     private void validateFrameworkCompatibility(TestGenerationRequestDto dto) {
         boolean valid = switch (dto.testType()) {
-            case BACKEND_API -> dto.framework() == TestFramework.KARATE;
+            case BACKEND_API -> dto.framework() == TestFramework.KARATE || dto.framework() == TestFramework.REST_ASSURED;
             case FRONTEND_WEB -> dto.framework() == TestFramework.SELENIUM;
         };
 
         if (!valid) {
             throw new BadRequestException(
                     "testType/framework uyumsuz: " + dto.testType() + " icin " + dto.framework()
-                            + " kullanilamaz. Gecerli eslesmeler: BACKEND_API/KARATE, "
+                            + " kullanilamaz. Gecerli eslesmeler: BACKEND_API/KARATE, BACKEND_API/REST_ASSURED, "
                             + "FRONTEND_WEB/SELENIUM");
         }
     }

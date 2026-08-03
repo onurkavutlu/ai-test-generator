@@ -184,6 +184,48 @@ public final class CodeCleaner {
     }
 
     /**
+     * Üretilen Java testini derlenebilirlik için deterministik normalize eder.
+     * LLM prompt'a rağmen bunları sık atlar — koda güvenmek yerine burada garanti edilir:
+     *  1. JUnit 4 import/annotation'ları JUnit 5'e çevrilir (pom'da yalnızca JUnit 5 var)
+     *  2. "package com.testgen.generated;" satırı yoksa eklenir
+     *  3. expectedClassName verilirse public class adı dosya adıyla eşitlenir
+     *     (javac: public class adı dosya adıyla aynı olmak zorunda)
+     */
+    public static String normalizeGeneratedJavaTest(String content, String expectedClassName) {
+        if (content == null || content.isBlank()) {
+            return content;
+        }
+        String result = content
+                .replace("import org.junit.Test;", "import org.junit.jupiter.api.Test;")
+                .replace("import org.junit.Before;", "import org.junit.jupiter.api.BeforeEach;")
+                .replace("import org.junit.After;", "import org.junit.jupiter.api.AfterEach;")
+                .replace("import org.junit.BeforeClass;", "import org.junit.jupiter.api.BeforeAll;")
+                .replace("import org.junit.AfterClass;", "import org.junit.jupiter.api.AfterAll;")
+                .replace("import static org.junit.Assert.", "import static org.junit.jupiter.api.Assertions.")
+                .replaceAll("(?m)^(\\s*)@Before(\\s*)$", "$1@BeforeEach$2")
+                .replaceAll("(?m)^(\\s*)@After(\\s*)$", "$1@AfterEach$2")
+                .replaceAll("(?m)^(\\s*)@BeforeClass(\\s*)$", "$1@BeforeAll$2")
+                .replaceAll("(?m)^(\\s*)@AfterClass(\\s*)$", "$1@AfterAll$2");
+
+        if (!result.stripLeading().startsWith("package ")) {
+            result = "package com.testgen.generated;\n\n" + result;
+        }
+
+        if (expectedClassName != null && !expectedClassName.isBlank()) {
+            String actual = extractClassName(result);
+            if (!actual.equals(expectedClassName) && !actual.startsWith("GeneratedTest_")) {
+                result = result.replaceAll("\\b" + Pattern.quote(actual) + "\\b", expectedClassName);
+            }
+        }
+        return result;
+    }
+
+    /** İçerikteki public class adını döner (bulunamazsa zaman damgalı fallback). */
+    public static String publicClassName(String javaContent) {
+        return extractClassName(javaContent);
+    }
+
+    /**
      * LLM çıktısından birden fazla Java sınıfını ayıklar.
      * Her ```java ... ``` bloğunu ayrı bir sınıf olarak döndürür.
      */

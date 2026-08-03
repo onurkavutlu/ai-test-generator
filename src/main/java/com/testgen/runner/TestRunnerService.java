@@ -44,6 +44,7 @@ public class TestRunnerService {
     private final GeneratedJavaTestProjectService javaTestProjectService;
     private final FailureAnalysisService          failureAnalysisService;
     private final com.testgen.service.AgentLearningService agentLearningService;
+    private final com.testgen.service.TestSuiteService testSuiteService;
 
     @Value("${test-generator.runner.timeout-seconds}")
     private int timeoutSeconds;
@@ -53,6 +54,42 @@ public class TestRunnerService {
 
     @Value("${test-generator.selenium.headless:true}")
     private boolean seleniumHeadless;
+
+    // ─────────────────────────────────────────────────────────
+    // Suite koşumu: kullanıcı tanımlı paketteki tüm case'ler
+    // ─────────────────────────────────────────────────────────
+    @Async
+    public CompletableFuture<Void> runSuite(String suiteId) {
+        var suite = testSuiteService.get(suiteId);
+        List<GeneratedTestCase> cases = suite.getTestCases();
+        log.info("Suite koşumu başlıyor: '{}' — {} case", suite.getName(), cases.size());
+
+        // Suite'teki Java framework'lerinin proje dizinlerini temizle (bayat dosya koşulmasın)
+        cases.stream().map(GeneratedTestCase::getFramework).distinct()
+                .forEach(javaTestProjectService::cleanTestFiles);
+
+        List<CompletableFuture<Void>> futures = cases.stream().map(tc ->
+                CompletableFuture.runAsync(() -> {
+                    tc.setRunStatus(TestRunStatus.RUNNING);
+                    testCaseRepository.save(tc);
+                    TestRunResult result = runSingle(tc);
+                    applyResult(tc, result);
+                    testCaseRepository.save(tc);
+                    log.info("  [suite] {} — {}", tc.getTestName(), tc.getRunStatus());
+                })
+        ).toList();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        int passed = 0, failed = 0;
+        for (GeneratedTestCase tc : cases) {
+            var fresh = testCaseRepository.findById(tc.getId()).orElse(tc);
+            if (fresh.getRunStatus() == TestRunStatus.PASSED) passed++;
+            else if (fresh.getRunStatus() == TestRunStatus.FAILED) failed++;
+        }
+        testSuiteService.recordRunSummary(suiteId, passed, failed);
+        log.info("Suite koşumu bitti: '{}' — {} PASSED / {} FAILED", suite.getName(), passed, failed);
+        return CompletableFuture.completedFuture(null);
+    }
 
     // ─────────────────────────────────────────────────────────
     // Tek test case çalıştır
@@ -127,6 +164,9 @@ public class TestRunnerService {
                     testCaseRepository.saveAll(newCases);
                     log.info("{} yeni self-heal test üretildi. Koşuluyor...", newCases.size());
 
+                    // Suite üyeliği: eski FAILED case yerine heal edilen versiyon geçsin
+                    newCases.forEach(tc -> testSuiteService.replaceCaseInSuites(tc.getParentCaseId(), tc));
+
                     // Eski test dosyalarını temizle (iyileştirilmiş versiyonlar koşulmadan önce)
                     javaTestProjectService.cleanTestFiles(request.getFramework());
 
@@ -161,7 +201,7 @@ public class TestRunnerService {
         try {
             return switch (tc.getFramework()) {
                 case KARATE   -> karateRunner.run(tc);
-                case SELENIUM -> runMavenTest(tc);
+                case SELENIUM, REST_ASSURED -> runMavenTest(tc);
             };
         } catch (Exception e) {
             log.error("Runner hatası: {}", tc.getTestName(), e);

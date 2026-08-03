@@ -169,12 +169,21 @@ public class KarateTestGenerator {
 
     private GeneratedTestCase generateFromRawPayload(TestGenerationRequest request) {
         String context = request.getAdditionalContext() != null ? request.getAdditionalContext() : "";
+        String payloadType = request.getPayloadType() != null ? request.getPayloadType() : "CURL";
         String generatedContent = llmService.generateFromRawPayload(
-                request.getRawPayload(),
-                request.getPayloadType() != null ? request.getPayloadType() : "CURL",
-                context);
+                request.getRawPayload(), payloadType, context);
 
         String cleanContent = CodeCleaner.cleanFeatureContent(generatedContent);
+
+        // Gözlem-temelli akışta (CAPTURED payload VEYA bağlamda OBSERVED RESPONSE) geçerli
+        // feature garantisi: LLM çıktısı sözdizimi doğrulamasından geçemezse gözlenen
+        // veriden deterministik feature üretilir. Prompt seçimiyle aynı koşul — tutarlı.
+        boolean observedFlow = "CAPTURED".equalsIgnoreCase(payloadType)
+                || context.contains("## OBSERVED RESPONSE");
+        if (observedFlow && !looksLikeValidCapturedFeature(cleanContent)) {
+            log.warn("LLM geçersiz/şüpheli Karate içeriği döndürdü — deterministik gözlem feature'ına düşülüyor.");
+            cleanContent = buildDeterministicCapturedFeature(context);
+        }
         String featureName = "RawPayloadTest";
 
         GeneratedTestCase tc = GeneratedTestCase.builder()
@@ -264,6 +273,53 @@ public class KarateTestGenerator {
 
         saveToFile(tc.getFileName(), cleanContent);
         return tc;
+    }
+
+    /**
+     * CAPTURED akışı için hızlı sözdizimi doğrulaması.
+     * llama sınıfı modellerin bilinen hataları ("* url = '...'", "* def url")
+     * bu kontrolden geçemez ve deterministik fallback devreye girer.
+     */
+    static boolean looksLikeValidCapturedFeature(String content) {
+        if (content == null || !content.contains("Feature:")) {
+            return false;
+        }
+        boolean hasValidUrl = java.util.regex.Pattern
+                .compile("(?m)^\\s*\\*\\s*url\\s+'[^']+'").matcher(content).find();
+        boolean hasStatusAssertion = content.contains("Then status");
+        return hasValidUrl && hasStatusAssertion;
+    }
+
+    /**
+     * OBSERVED RESPONSE bağlamından deterministik smoke feature'ı üretir.
+     * LLM'e hiç güvenmeden geçerli ve geçen bir test garanti eder:
+     * gözlenen status doğrulanır + yanıt süresi kontrol edilir.
+     */
+    static String buildDeterministicCapturedFeature(String context) {
+        String ctx = context == null ? "" : context;
+        java.util.regex.Matcher mStat = java.util.regex.Pattern
+                .compile("Gözlenen Status:\\s*(\\d+)").matcher(ctx);
+        int status = mStat.find() ? Integer.parseInt(mStat.group(1)) : 200;
+        java.util.regex.Matcher mReq = java.util.regex.Pattern
+                .compile("İstek\\s*:\\s*(\\w+)\\s+(\\S+)").matcher(ctx);
+        String method = "GET", url = "http://localhost:8080";
+        if (mReq.find()) {
+            method = mReq.group(1).toUpperCase();
+            url = mReq.group(2);
+        }
+        return """
+                @testCaseLLM
+                Feature: Yakalanan yanit dogrulamasi (deterministik)
+
+                  Background:
+                    * url '%s'
+
+                  @smoke @testCaseLLM
+                  Scenario: [SMOKE][P0_BLOCKER][EP] Gozlenen status dogrulanir
+                    When method %s
+                    Then status %d
+                    And assert responseTime < 10000
+                """.formatted(url, method, status);
     }
 
     private String buildFeatureName(String path, String method) {

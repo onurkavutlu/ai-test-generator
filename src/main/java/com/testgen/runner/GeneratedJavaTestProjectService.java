@@ -17,6 +17,9 @@ public class GeneratedJavaTestProjectService {
     @Value("${test-generator.output.selenium-path}")
     private String seleniumOutputPath;
 
+    @Value("${test-generator.output.restassured-path:/tmp/generated-tests/restassured}")
+    private String restassuredOutputPath;
+
     @Value("${selenium.version:4.18.1}")
     private String seleniumVersion;
 
@@ -42,6 +45,8 @@ public class GeneratedJavaTestProjectService {
      * SELENIUM_REMOTE_URL doluysa Grid'e (RemoteWebDriver), boşsa lokal headless Chrome'a bağlanır.
      */
     private static final String DRIVER_FACTORY_SOURCE = """
+            package com.testgen.generated;
+
             import org.openqa.selenium.WebDriver;
             import org.openqa.selenium.chrome.ChromeOptions;
             import org.openqa.selenium.remote.RemoteWebDriver;
@@ -96,13 +101,13 @@ public class GeneratedJavaTestProjectService {
     }
 
     public void cleanTestFiles(TestFramework framework) {
-        if (framework != TestFramework.SELENIUM) return;
+        if (framework != TestFramework.SELENIUM && framework != TestFramework.REST_ASSURED) return;
         Path dir = sourceDir(projectDir(framework));
         if (Files.exists(dir)) {
             try (var stream = Files.list(dir)) {
                 stream.forEach(path -> {
                     String name = path.getFileName().toString();
-                    if (name.endsWith("Test.java") || name.contains("Test_Fixed_")) {
+                    if (name.endsWith(".java") && !name.equals("DriverFactory.java")) {
                         try {
                             Files.delete(path);
                             log.info("Temizlenen eski Java test dosyası: {}", name);
@@ -120,6 +125,7 @@ public class GeneratedJavaTestProjectService {
     public Path projectDir(TestFramework framework) {
         return switch (framework) {
             case SELENIUM -> Path.of(seleniumOutputPath);
+            case REST_ASSURED -> Path.of(restassuredOutputPath);
             default -> throw new IllegalArgumentException("Java test projesi desteklenmiyor: " + framework);
         };
     }
@@ -129,62 +135,78 @@ public class GeneratedJavaTestProjectService {
     }
 
     private String pomFor(TestFramework framework) {
-        String extraDependency = "";
+        String extraDependencies = "";
+        if (framework == TestFramework.REST_ASSURED) {
+            extraDependencies = """
+                        <dependency>
+                            <groupId>io.rest-assured</groupId>
+                            <artifactId>rest-assured</artifactId>
+                            <version>5.4.0</version>
+                            <scope>test</scope>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.hamcrest</groupId>
+                            <artifactId>hamcrest</artifactId>
+                            <version>2.2</version>
+                            <scope>test</scope>
+                        </dependency>
+                        """;
+        }
 
         return """
-                <?xml version="1.0" encoding="UTF-8"?>
-                <project xmlns="http://maven.apache.org/POM/4.0.0"
-                         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-                    <modelVersion>4.0.0</modelVersion>
-                    <groupId>com.testgen.generated</groupId>
-                    <artifactId>%s-generated-tests</artifactId>
-                    <version>1.0.0</version>
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.testgen.generated</groupId>
+    <artifactId>%s-generated-tests</artifactId>
+    <version>1.0.0</version>
 
-                    <properties>
-                        <maven.compiler.source>17</maven.compiler.source>
-                        <maven.compiler.target>17</maven.compiler.target>
-                        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-                        <junit.version>5.10.2</junit.version>
-                    </properties>
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <junit.version>5.10.2</junit.version>
+    </properties>
 
-                    <dependencies>
-                        <dependency>
-                            <groupId>org.junit.jupiter</groupId>
-                            <artifactId>junit-jupiter</artifactId>
-                            <version>${junit.version}</version>
-                            <scope>test</scope>
-                        </dependency>
-                        <dependency>
-                            <groupId>org.seleniumhq.selenium</groupId>
-                            <artifactId>selenium-java</artifactId>
-                            <version>%s</version>
-                            <scope>test</scope>
-                        </dependency>
-                        <dependency>
-                            <groupId>io.github.bonigarcia</groupId>
-                            <artifactId>webdrivermanager</artifactId>
-                            <version>5.8.0</version>
-                            <scope>test</scope>
-                        </dependency>
-                %s
-                    </dependencies>
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>%s</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.bonigarcia</groupId>
+            <artifactId>webdrivermanager</artifactId>
+            <version>5.8.0</version>
+            <scope>test</scope>
+        </dependency>
+%s
+    </dependencies>
 
-                    <build>
-                        <plugins>
-                            <plugin>
-                                <groupId>org.apache.maven.plugins</groupId>
-                                <artifactId>maven-surefire-plugin</artifactId>
-                                <version>3.2.5</version>
-                                <configuration>
-                                    <useModulePath>false</useModulePath>
-                                    <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
-                                </configuration>
-                            </plugin>
-                        </plugins>
-                    </build>
-                </project>
-                """
-                .formatted(framework.name().toLowerCase(), seleniumVersion, extraDependency);
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+"""
+                .formatted(framework.name().toLowerCase(), seleniumVersion, extraDependencies);
     }
 }

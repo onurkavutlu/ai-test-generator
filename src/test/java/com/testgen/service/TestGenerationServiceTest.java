@@ -30,6 +30,9 @@ public class TestGenerationServiceTest {
     private SeleniumTestGenerator seleniumTestGenerator;
 
     @Mock
+    private com.testgen.generator.RestAssuredTestGenerator restAssuredTestGenerator;
+
+    @Mock
     private TestGenerationRequestRepository requestRepository;
 
     @Mock
@@ -43,6 +46,9 @@ public class TestGenerationServiceTest {
 
     @Mock
     private AgentLearningService agentLearningService;
+
+    @Mock
+    private ObservationService observationService;
 
     @InjectMocks
     private TestGenerationService testGenerationService;
