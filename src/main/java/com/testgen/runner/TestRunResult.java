@@ -27,7 +27,7 @@ public record TestRunResult(
         return new TestRunResult(passed, truncated, total, passedCount, failedCount, durationMs);
     }
 
-    /** Sadece total biliniyorsa (Selenium/Appium alt-süreç). */
+    /** Sadece total biliniyorsa (Selenium alt-süreç). */
     public static TestRunResult ofMaven(boolean passed, String output, int total, long durationMs) {
         int p = passed ? total : 0;
         int f = passed ? 0 : total;

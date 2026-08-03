@@ -247,6 +247,7 @@ public class AllureReportService {
     private void writeEnvironmentProperties(String requestId) {
         try {
             Path dir = Path.of(allureResultsPath, requestId);
+            Files.createDirectories(dir);
             String props = """
                     Application=AI Test Generator
                     Version=1.0.0
@@ -263,6 +264,7 @@ public class AllureReportService {
     private void writeCategoriesJson(String requestId) {
         try {
             Path dir = Path.of(allureResultsPath, requestId);
+            Files.createDirectories(dir);
             String categories = """
                     [
                       {

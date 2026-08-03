@@ -3,5 +3,5 @@ package com.testgen.model;
 public enum TestFramework {
     KARATE,
     SELENIUM,
-    APPIUM
+    REST_ASSURED
 }

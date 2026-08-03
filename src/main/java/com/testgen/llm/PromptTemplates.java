@@ -65,7 +65,12 @@ public final class PromptTemplates {
                                 Requirements:
                                 - Use Karate DSL syntax (Feature, Background, Scenario)
                                 - Background: set baseUrl and Content-Type header
-                                - Include these scenarios (minimum):
+                                - APPLICABILITY RULE (CRITICAL): The scenario lists below are TEMPLATES.
+                                  Only generate scenarios that genuinely apply to the target.
+                                  If the Context explicitly states something does not exist or must not be tested
+                                  (e.g. "auth YOK", "400 senaryosu YOKTUR", "form YOK"), OMIT those scenarios entirely.
+                                  A passing, applicable subset is better than a failing, complete template.
+                                - Include these scenarios (only the applicable ones):
 
                                   ## Fonksiyonel Testler:
                                   1. [SMOKE][P0_BLOCKER][EP] Happy path — geçerli eşdeğerlik sınıfı (200/201)
@@ -83,7 +88,7 @@ public final class PromptTemplates {
 
                                 - Use `match response.field == '#notnull'` for assertions
                                 - Set `karate.configure('connectTimeout', 5000)` in Background
-                                - Her senaryonun tag'ında ISTQB kategorisini belirt: @smoke, @regression, @negative, @boundary, @security, @performance
+                                - Her senaryonun tag'ında ISTQB kategorisini belirt: @smoke, @regression, @negative, @boundary, @security, @performance. Ayrıca yapay zeka üretimi olduğunu belirtmek için ek olarak mutlaka @testCaseLLM tag'ini ekle.
 
                                 %s
 
@@ -106,14 +111,27 @@ public final class PromptTemplates {
 
                                 Requirements:
                                 - TWO classes: [PageName]Page.java and [TestName]Test.java
+                                - MUST start with exactly: package com.testgen.generated;
+                                - MUST include these exact imports:
+                                  import org.openqa.selenium.WebDriver;
+                                  import org.openqa.selenium.WebElement;
+                                  import org.openqa.selenium.By;
+                                  import org.openqa.selenium.support.ui.WebDriverWait;
+                                  import org.openqa.selenium.support.ui.ExpectedConditions;
+                                  import java.time.Duration;
                                 - Use JUnit 5 (@Test, @BeforeEach, @AfterEach)
-                                - Use WebDriverWait for explicit waits
-                                - @FindBy annotations in Page class
-                                - ChromeOptions with headless support
-                                - Read remote URL from: System.getenv("SELENIUM_REMOTE_URL")
-                                - No package declaration. No custom base classes.
+                                - WARNING (SELENIUM 4 SYNTAX): ALWAYS use `Duration.ofSeconds(...)` for timeouts. NEVER pass an integer directly to WebDriverWait. (e.g. `new WebDriverWait(driver, Duration.ofSeconds(10))`)
+                                - Driver setup: ONLY use `driver = DriverFactory.createDriver();` in @BeforeEach.
+                                  (DriverFactory is already provided in the same package — do NOT define it or import it)
+                                - Always call driver.quit() in @AfterEach
+                                - No custom base classes.
 
-                                Test Methods (minimum — ISTQB etiketli):
+                                - APPLICABILITY RULE (CRITICAL): The scenario lists below are TEMPLATES.
+                                  Only generate scenarios that genuinely apply to the target.
+                                  If the Context explicitly states something does not exist or must not be tested
+                                  (e.g. "auth YOK", "400 senaryosu YOKTUR", "form YOK"), OMIT those scenarios entirely.
+                                  A passing, applicable subset is better than a failing, complete template.
+                                Test Methods (only the applicable ones — ISTQB etiketli):
                                   ## Fonksiyonel:
                                   1. smokeShouldLoadPage — [SMOKE][P0][EP] Geçerli sayfa yüklemesi
                                   2. regressionShouldCompleteMainFlow — [REGRESSION][P1][ST] Ana akış durum geçişi
@@ -136,49 +154,194 @@ public final class PromptTemplates {
                                                 htmlHint != null ? htmlHint : "not provided", ISTQB_RULES);
         }
 
+
+
         // ─────────────────────────────────────────────────────────
-        // APPIUM (Mobile)
+        // REST ASSURED (Backend API)
         // ─────────────────────────────────────────────────────────
-        public static String buildAppiumPrompt(String appPackage, String userStory,
-                        String platform, String additionalContext) {
+        public static String buildRestAssuredPrompt(String swaggerContent, String endpoint,
+                        String method, String context) {
                 return """
-                                Write Appium Java tests using Page Object Model.
+                                Write a REST Assured Java test class using JUnit 5 for the following API endpoint.
                                 Follow ISTQB test design techniques strictly.
 
-                                Platform: %s
-                                App Package: %s
-                                User story: %s
+                                Method: %s
+                                Path: %s
                                 Context: %s
 
+                                OpenAPI spec (excerpt):
+                                %s
+
                                 Requirements:
-                                - TWO classes: [ScreenName]Screen.java and [TestName]AppiumTest.java
-                                - Use JUnit 5 (@Test, @BeforeEach, @AfterEach)
-                                - UiAutomator2Options for Android, XCUITestOptions for iOS
-                                - Use AppiumBy for element lookup
-                                - Read server URL from: System.getenv("APPIUM_SERVER_URL")
-                                - No package declaration. No custom base classes.
+                                - MUST start with exactly: package com.testgen.generated;
+                                - MUST include all required imports (e.g. io.restassured.RestAssured, org.junit.jupiter.api.*, org.hamcrest.Matchers.*).
+                                - Class name must end with 'Test' (e.g. GeneratedApiTest).
+                                - Use JUnit 5 (@Test, @BeforeEach, etc).
+                                - Set RestAssured.baseURI and setup headers in @BeforeEach.
+                                - Use BDD syntax: given().when().then().
+                                - APPLICABILITY RULE (CRITICAL): The scenario lists below are TEMPLATES.
+                                  Only generate scenarios that genuinely apply to the target.
+                                  If the Context explicitly states something does not exist or must not be tested
+                                  (e.g. "auth YOK", "400 senaryosu YOKTUR"), OMIT those scenarios entirely.
+                                  A passing, applicable subset is better than a failing, complete template.
+                                - Include these scenarios (only the applicable ones):
 
-                                Test Methods (minimum — ISTQB etiketli):
-                                  ## Fonksiyonel:
-                                  1. smokeShouldOpenScreen — [SMOKE][P0][EP] Ekran açılma doğrulaması
-                                  2. regressionShouldCompleteFlow — [REGRESSION][P1][ST] Ana akış durum geçişi
-                                  3. regressionShouldWorkWithVariousInputs — [REGRESSION][P1][EP] Farklı girdi varyasyonları
-                                  4. negativeShouldRejectInvalidInput — [NEGATIVE][P1][EP] Geçersiz girdi sınıfı
-                                  5. boundaryShouldHandleEdgeState — [BOUNDARY][P2][BVA] Sınır durumları
-                                  6. e2eShouldCompleteUserJourney — [E2E][P1][ST] Tam kullanıcı yolculuğu
+                                  ## Fonksiyonel Testler:
+                                  1. smokeHappyPath — [SMOKE][P0_BLOCKER][EP] Happy path (200/201)
+                                  2. regressionValidVariations — [REGRESSION][P1_CRITICAL][EP] Different valid data
+                                  3. negativeValidationError — [NEGATIVE][P1_CRITICAL][EP] Invalid equivalence class (400)
+                                  4. negativeMissingFields — [NEGATIVE][P1_CRITICAL][EG] Missing required fields
+                                  5. boundaryEdgeCases — [BOUNDARY][P2_MAJOR][BVA] Boundary values (min/max length)
 
-                                  ## Fonksiyonel Olmayan:
-                                  7. securityShouldHandleSessionTimeout — [SECURITY][P1][ST] Oturum zaman aşımı
-                                  8. usabilityShouldSupportRotation — [USABILITY][P3][EG] Ekran döndürme
-                                  9. reliabilityShouldRecoverFromBackground — [RELIABILITY][P2][ST] Arka plandan dönüş
-                                  10. performanceShouldRespondQuickly — [PERFORMANCE][P2][BVA] Yanıt süresi kontrolü
+                                  ## Fonksiyonel Olmayan Testler:
+                                  6. securityUnauthorized — [SECURITY][P0_BLOCKER][EG] Missing auth header (401)
+                                  7. performanceResponseTime — [PERFORMANCE][P2_MAJOR][BVA] Response time assertion
 
                                 %s
 
                                 Return ONLY Java code. No explanation.
                                 """
-                                .formatted(platform, appPackage, userStory,
-                                                additionalContext != null ? additionalContext : "", ISTQB_RULES);
+                                .formatted(method, endpoint, context, truncateSpec(swaggerContent), ISTQB_RULES);
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // CAPTURED RESPONSE → gözlem-temelli dar senaryo seti
+        // ─────────────────────────────────────────────────────────
+        /**
+         * Canlı koşumda yakalanan gerçek yanıt için test üretimi.
+         * Şablon senaryo listesi BİLEREK kullanılmaz: assertion'lar yalnızca
+         * gözlenen davranışa yazılır — geçmeyen spekülatif senaryo üretilmez.
+         */
+        public static String buildCapturedResponsePrompt(String rawPayload, String context) {
+                return """
+                                Write a Karate DSL feature file for a request whose REAL response was captured live.
+                                The context below contains an OBSERVED RESPONSE section — that is the ground truth.
+
+                                Request (cURL):
+                                %s
+
+                                Context (includes OBSERVED RESPONSE):
+                                %s
+
+                                STRICT RULES — generate EXACTLY these three scenarios and NOTHING else:
+                                  1. [SMOKE][P0_BLOCKER][EP] Send the exact request; assert the OBSERVED status code
+                                     and match ONLY the fields/values visible in the OBSERVED body.
+                                  2. [PERFORMANCE][P2_MAJOR][BVA] Send the same request; `Then assert responseTime < 5000`
+                                  3. [NEGATIVE][P2_MAJOR][EG] Same base URL with path suffix '/nonexistent-path-xyz'
+                                     appended; assert status 404.
+                                - DO NOT invent 400/401/403/405 scenarios. DO NOT modify the request body or headers.
+                                - DO NOT assert any field that is not present in the OBSERVED body.
+                                - Background: set the base url and headers from the cURL. Add @testCaseLLM tags.
+                                - Use VALID Karate syntax: `* url 'http://...'` (no equals sign, no def for url).
+
+                                Return ONLY the .feature file content. No explanation.
+                                """.formatted(rawPayload, context != null ? context : "");
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // RAW PAYLOAD (cURL / JSON / XML) → Karate Feature
+        // ─────────────────────────────────────────────────────────
+        public static String buildRawPayloadPrompt(String rawPayload, String payloadType, String context) {
+                // Canlı yakalanan yanıt akışı: şablon senaryolar yerine gözlem-temelli dar set
+                if ("CAPTURED".equalsIgnoreCase(payloadType)
+                                || (context != null && context.contains("## OBSERVED RESPONSE"))) {
+                        return buildCapturedResponsePrompt(rawPayload, context);
+                }
+                return """
+                                Write a Karate DSL feature file based on the following raw payload.
+                                The payload represents an API request (e.g. cURL, JSON body, or XML).
+                                Follow ISTQB test design techniques strictly.
+
+                                Payload Type: %s
+                                Raw Payload:
+                                %s
+
+                                Context: %s
+
+                                Requirements:
+                                - Analyze the payload to determine the endpoint URL, method, headers, and body.
+                                - Use Karate DSL syntax (Feature, Background, Scenario).
+                                - Background: set baseUrl to the actual endpoint extracted from the payload, configure headers.
+                                - Generate a test scenario that sends this exact request to the real endpoint and asserts a successful response (e.g., status 200/201).
+                                - Generate negative/edge case scenarios based on the input structure (e.g., missing fields).
+                                - APPLICABILITY RULE (CRITICAL): The scenario lists below are TEMPLATES.
+                                  Only generate scenarios that genuinely apply to the target.
+                                  If the Context explicitly states something does not exist or must not be tested
+                                  (e.g. "auth YOK", "400 senaryosu YOKTUR", "form YOK"), OMIT those scenarios entirely.
+                                  A passing, applicable subset is better than a failing, complete template.
+                                - Include these scenarios (only the applicable ones):
+                                  1. [SMOKE][P0_BLOCKER][EP] Happy path — send the exact payload and verify success
+                                  2. [REGRESSION][P1_CRITICAL][EP] Modify the payload with different valid variations
+                                  3. [NEGATIVE][P1_CRITICAL][EG] Send missing/invalid fields and expect validation errors (400)
+                                  4. [SECURITY][P0_BLOCKER][EG] Test without authorization headers (401)
+                                - Her senaryoda yapay zeka üretimi olduğunu belirtmek için mutlaka @testCaseLLM tag'ini ekle.
+                                
+                                %s
+
+                                Return ONLY the .feature file content. No explanation.
+                                """
+                                .formatted(payloadType, rawPayload, context != null ? context : "", ISTQB_RULES);
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // GRAPHQL
+        // ─────────────────────────────────────────────────────────
+        public static String buildGraphQLPrompt(String graphqlDetails, String context) {
+                return """
+                                Write a Karate DSL feature file based on the following GraphQL request.
+                                Follow ISTQB test design techniques strictly.
+
+                                Request Details:
+                                %s
+
+                                Context: %s
+
+                                Requirements:
+                                - Use Karate DSL syntax.
+                                - Background: set baseUrl to the GraphQL endpoint (usually '/graphql').
+                                - Request body must include 'query' and 'variables' correctly as JSON.
+                                - Method must be POST.
+                                - Generate a test scenario that asserts the response structure.
+                                - Ensure to verify: `match response.data != null` and `match response.errors == '#notpresent'`.
+                                - Generate at least one negative scenario (e.g. invalid query or missing variable).
+                                - Her senaryoda yapay zeka üretimi olduğunu belirtmek için mutlaka @testCaseLLM tag'ini ekle.
+                                
+                                %s
+
+                                Return ONLY the .feature file content. No explanation.
+                                """
+                                .formatted(graphqlDetails, context != null ? context : "", ISTQB_RULES);
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // SOAP
+        // ─────────────────────────────────────────────────────────
+        public static String buildSoapPrompt(String soapXml, String context) {
+                return """
+                                Write a Karate DSL feature file based on the following SOAP XML payload.
+                                Follow ISTQB test design techniques strictly.
+
+                                SOAP Payload:
+                                %s
+
+                                Context: %s
+
+                                Requirements:
+                                - Use Karate DSL syntax.
+                                - Background: set baseUrl to the SOAP endpoint.
+                                - Set header `Content-Type = 'text/xml;charset=UTF-8'`.
+                                - Pass the SOAP Payload as the request body.
+                                - Method must be POST.
+                                - Generate a test scenario that asserts the response XML structure.
+                                - Use Karate's XML validation features (e.g., `match response /Envelope/Body...`).
+                                - Generate at least one negative scenario (e.g. invalid envelope or missing mandatory tag).
+                                - Her senaryoda yapay zeka üretimi olduğunu belirtmek için mutlaka @testCaseLLM tag'ini ekle.
+                                
+                                %s
+
+                                Return ONLY the .feature file content. No explanation.
+                                """
+                                .formatted(soapXml, context != null ? context : "", ISTQB_RULES);
         }
 
         // ─────────────────────────────────────────────────────────
@@ -207,6 +370,7 @@ public final class PromptTemplates {
                                 - [SECURITY][P0][EG] Yetki kontrolü ve injection denemesi
                                 - [PERFORMANCE][P2][BVA] Yanıt süresi ve timeout kontrolü
                                 - [USABILITY][P3][EG] Hata mesajı görünürlüğü ve kullanıcı geri bildirimi
+                                - Her senaryoda yapay zeka üretimi olduğunu belirtmek için mutlaka @testCaseLLM tag'ini ekle.
 
                                 %s
 
@@ -216,127 +380,4 @@ public final class PromptTemplates {
 
 }
 
-        private PromptTemplates() {
-        }
 
-        /**
-         * Swagger spec'i 3000 karakterde keser — küçük modeller için context koruması.
-         */
-        private static String truncateSpec(String spec) {
-                if (spec == null)
-                        return "";
-                return spec.length() > 3000 ? spec.substring(0, 3000) + "\n... [spec kısaltıldı]" : spec;
-        }
-
-        // ─────────────────────────────────────────────────────────
-        // KARATE (Backend API)
-        // ─────────────────────────────────────────────────────────
-        public static String buildKaratePrompt(String swaggerContent, String endpoint,
-                        String method, String context) {
-                return """
-                                Write a Karate DSL feature file for the following API endpoint.
-
-                                Method: %s
-                                Path: %s
-                                Context: %s
-
-                                OpenAPI spec (excerpt):
-                                %s
-
-                                Requirements:
-                                - Use Karate DSL syntax (Feature, Background, Scenario)
-                                - Background: set baseUrl and Content-Type header
-                                - Include these scenarios:
-                                  1. [SMOKE] Happy path (200/201)
-                                  2. [NEGATIVE] Validation error (400)
-                                  3. [SECURITY] Unauthorized (401)
-                                  4. [EDGE] Not found or boundary value (404 or edge input)
-                                - Use `match response.field == '#notnull'` for assertions
-                                - Set `karate.configure('connectTimeout', 5000)` in Background
-
-                                Return ONLY the .feature file content. No explanation.
-                                """.formatted(method, endpoint, context, truncateSpec(swaggerContent));
-        }
-
-        // ─────────────────────────────────────────────────────────
-        // SELENIUM (Frontend Web)
-        // ─────────────────────────────────────────────────────────
-        public static String buildSeleniumPrompt(String pageUrl, String userStory, String htmlHint) {
-                return """
-                                Write a Selenium WebDriver Java test using Page Object Model.
-
-                                URL: %s
-                                User story: %s
-                                HTML hints / selectors: %s
-
-                                Requirements:
-                                - TWO classes: [PageName]Page.java and [TestName]Test.java
-                                - Use JUnit 5 (@Test, @BeforeEach, @AfterEach)
-                                - Use WebDriverWait for explicit waits
-                                - @FindBy annotations in Page class
-                                - ChromeOptions with headless support
-                                - Read remote URL from: System.getenv("SELENIUM_REMOTE_URL")
-                                - Include these test methods:
-                                  1. smokeShouldLoadPage
-                                  2. regressionShouldCompleteMainFlow
-                                  3. negativeShouldRejectInvalidInput
-                                  4. edgeShouldHandleBoundaryInput
-                                - No package declaration. No custom base classes.
-
-                                Return ONLY Java code. No explanation.
-                                """.formatted(pageUrl, userStory, htmlHint != null ? htmlHint : "not provided");
-        }
-
-        // ─────────────────────────────────────────────────────────
-        // APPIUM (Mobile)
-        // ─────────────────────────────────────────────────────────
-        public static String buildAppiumPrompt(String appPackage, String userStory,
-                        String platform, String additionalContext) {
-                return """
-                                Write an Appium Java test using Page Object Model.
-
-                                Platform: %s
-                                App Package: %s
-                                User story: %s
-                                Context: %s
-
-                                Requirements:
-                                - TWO classes: [ScreenName]Screen.java and [TestName]AppiumTest.java
-                                - Use JUnit 5 (@Test, @BeforeEach, @AfterEach)
-                                - UiAutomator2Options for Android, XCUITestOptions for iOS
-                                - Use AppiumBy for element lookup
-                                - Read server URL from: System.getenv("APPIUM_SERVER_URL")
-                                - Include these test methods:
-                                  1. smokeShouldOpenScreen
-                                  2. regressionShouldCompleteFlow
-                                  3. negativeShouldRejectInvalidInput
-                                  4. edgeShouldHandleBoundaryState
-                                - No package declaration. No custom base classes.
-
-                                Return ONLY Java code. No explanation.
-                                """.formatted(platform, appPackage, userStory,
-                                additionalContext != null ? additionalContext : "");
-        }
-
-        // ─────────────────────────────────────────────────────────
-        // USER STORY → Test Case (Genel)
-        // ─────────────────────────────────────────────────────────
-        public static String buildUserStoryPrompt(String userStory, String framework, String context) {
-                return """
-                                Write %s test cases for the following user story.
-
-                                User story: %s
-                                Context: %s
-
-                                Include:
-                                - Smoke test (happy path)
-                                - Regression test (core flows with data variations)
-                                - Negative test (invalid input, error messages)
-                                - Edge/boundary test (empty, null, max values)
-
-                                Label each scenario: [SMOKE], [REGRESSION], [NEGATIVE], [EDGE]
-
-                                Return ONLY code. No explanation.
-                                """.formatted(framework, userStory, context != null ? context : "");
-        }
-}

@@ -8,7 +8,6 @@ import com.testgen.report.ReportOrchestrator;
 import com.testgen.repository.GeneratedTestCaseRepository;
 import com.testgen.repository.TestGenerationRequestRepository;
 import com.testgen.scheduler.FailureAnalysisService;
-import com.testgen.service.MockDataGenerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,11 +42,54 @@ public class TestRunnerService {
     private final KarateRunner                    karateRunner;
     private final ReportOrchestrator              reportOrchestrator;
     private final GeneratedJavaTestProjectService javaTestProjectService;
-    private final MockDataGenerationService        mockDataGenerationService;
     private final FailureAnalysisService          failureAnalysisService;
+    private final com.testgen.service.AgentLearningService agentLearningService;
+    private final com.testgen.service.TestSuiteService testSuiteService;
 
     @Value("${test-generator.runner.timeout-seconds}")
     private int timeoutSeconds;
+
+    @Value("${test-generator.selenium.remote-url:}")
+    private String seleniumRemoteUrl;
+
+    @Value("${test-generator.selenium.headless:true}")
+    private boolean seleniumHeadless;
+
+    // ─────────────────────────────────────────────────────────
+    // Suite koşumu: kullanıcı tanımlı paketteki tüm case'ler
+    // ─────────────────────────────────────────────────────────
+    @Async
+    public CompletableFuture<Void> runSuite(String suiteId) {
+        var suite = testSuiteService.get(suiteId);
+        List<GeneratedTestCase> cases = suite.getTestCases();
+        log.info("Suite koşumu başlıyor: '{}' — {} case", suite.getName(), cases.size());
+
+        // Suite'teki Java framework'lerinin proje dizinlerini temizle (bayat dosya koşulmasın)
+        cases.stream().map(GeneratedTestCase::getFramework).distinct()
+                .forEach(javaTestProjectService::cleanTestFiles);
+
+        List<CompletableFuture<Void>> futures = cases.stream().map(tc ->
+                CompletableFuture.runAsync(() -> {
+                    tc.setRunStatus(TestRunStatus.RUNNING);
+                    testCaseRepository.save(tc);
+                    TestRunResult result = runSingle(tc);
+                    applyResult(tc, result);
+                    testCaseRepository.save(tc);
+                    log.info("  [suite] {} — {}", tc.getTestName(), tc.getRunStatus());
+                })
+        ).toList();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        int passed = 0, failed = 0;
+        for (GeneratedTestCase tc : cases) {
+            var fresh = testCaseRepository.findById(tc.getId()).orElse(tc);
+            if (fresh.getRunStatus() == TestRunStatus.PASSED) passed++;
+            else if (fresh.getRunStatus() == TestRunStatus.FAILED) failed++;
+        }
+        testSuiteService.recordRunSummary(suiteId, passed, failed);
+        log.info("Suite koşumu bitti: '{}' — {} PASSED / {} FAILED", suite.getName(), passed, failed);
+        return CompletableFuture.completedFuture(null);
+    }
 
     // ─────────────────────────────────────────────────────────
     // Tek test case çalıştır
@@ -58,7 +100,6 @@ public class TestRunnerService {
                 .orElseThrow(() -> new IllegalArgumentException("Test case bulunamadı: " + testCaseId));
 
         log.info("Test çalıştırılıyor: {} ({})", tc.getTestName(), tc.getFramework());
-        prepareKarateMock(tc);
 
         tc.setRunStatus(TestRunStatus.RUNNING);
         testCaseRepository.save(tc);
@@ -87,10 +128,12 @@ public class TestRunnerService {
         List<GeneratedTestCase> cases = testCaseRepository.findByRequestId(requestId);
         log.info("{} test case paralel koşturuluyor — requestId: {}", cases.size(), requestId);
 
+        // Eski test dosyalarını temizle (mvn compilation hatalarını önlemek için)
+        javaTestProjectService.cleanTestFiles(request.getFramework());
+
         // Her case için async iş başlat, hepsini bekle
         List<CompletableFuture<Void>> futures = cases.stream().map(tc ->
                 CompletableFuture.runAsync(() -> {
-                    prepareKarateMock(tc);
                     tc.setRunStatus(TestRunStatus.RUNNING);
                     testCaseRepository.save(tc);
 
@@ -121,9 +164,14 @@ public class TestRunnerService {
                     testCaseRepository.saveAll(newCases);
                     log.info("{} yeni self-heal test üretildi. Koşuluyor...", newCases.size());
 
+                    // Suite üyeliği: eski FAILED case yerine heal edilen versiyon geçsin
+                    newCases.forEach(tc -> testSuiteService.replaceCaseInSuites(tc.getParentCaseId(), tc));
+
+                    // Eski test dosyalarını temizle (iyileştirilmiş versiyonlar koşulmadan önce)
+                    javaTestProjectService.cleanTestFiles(request.getFramework());
+
                     List<CompletableFuture<Void>> healFutures = newCases.stream().map(tc ->
                             CompletableFuture.runAsync(() -> {
-                                prepareKarateMock(tc);
                                 tc.setRunStatus(TestRunStatus.RUNNING);
                                 testCaseRepository.save(tc);
 
@@ -153,8 +201,7 @@ public class TestRunnerService {
         try {
             return switch (tc.getFramework()) {
                 case KARATE   -> karateRunner.run(tc);
-                case SELENIUM -> runMavenTest(tc);
-                case APPIUM   -> runMavenTest(tc);
+                case SELENIUM, REST_ASSURED -> runMavenTest(tc);
             };
         } catch (Exception e) {
             log.error("Runner hatası: {}", tc.getTestName(), e);
@@ -171,13 +218,10 @@ public class TestRunnerService {
         tc.setFailedScenarios(result.failedCount());
         tc.setExecutionTimeMs(result.durationMs());
         tc.setLastRunAt(LocalDateTime.now());
-    }
 
-    private void prepareKarateMock(GeneratedTestCase tc) {
-        if (tc.getFramework() == TestFramework.KARATE) {
-            mockDataGenerationService.generateMockDataForTestCase(tc);
-            tc.setTestContent(mockDataGenerationService.redirectKarateUrl(tc.getTestContent()));
-            testCaseRepository.save(tc);
+        // Başarısızlıklar servis bazlı öğrenim deposuna düşer (halüsinasyon azaltma)
+        if (!result.passed() && tc.getRequest() != null) {
+            agentLearningService.recordRunFailure(tc.getRequest(), tc);
         }
     }
 
@@ -198,6 +242,14 @@ public class TestRunnerService {
             );
             pb.directory(projectDir.toFile());
             pb.redirectErrorStream(true);
+
+            // Selenium driver hedefini konfigürasyondan subprocess'e taşı:
+            // Grid (compose: selenium-hub) tanımlıysa RemoteWebDriver, değilse lokal headless Chrome
+            if (seleniumRemoteUrl != null && !seleniumRemoteUrl.isBlank()) {
+                pb.environment().put("SELENIUM_REMOTE_URL", seleniumRemoteUrl);
+            }
+            pb.environment().put("SELENIUM_HEADLESS", String.valueOf(seleniumHeadless));
+
             Process process = pb.start();
 
             StringBuilder output = new StringBuilder();

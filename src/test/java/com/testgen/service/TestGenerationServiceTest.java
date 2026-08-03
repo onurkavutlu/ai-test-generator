@@ -1,6 +1,5 @@
 package com.testgen.service;
 
-import com.testgen.generator.AppiumTestGenerator;
 import com.testgen.generator.KarateTestGenerator;
 import com.testgen.generator.SeleniumTestGenerator;
 import com.testgen.model.*;
@@ -31,7 +30,7 @@ public class TestGenerationServiceTest {
     private SeleniumTestGenerator seleniumTestGenerator;
 
     @Mock
-    private AppiumTestGenerator appiumTestGenerator;
+    private com.testgen.generator.RestAssuredTestGenerator restAssuredTestGenerator;
 
     @Mock
     private TestGenerationRequestRepository requestRepository;
@@ -44,6 +43,12 @@ public class TestGenerationServiceTest {
 
     @Mock
     private AiTestDataGenerationService aiTestDataGenerationService;
+
+    @Mock
+    private AgentLearningService agentLearningService;
+
+    @Mock
+    private ObservationService observationService;
 
     @InjectMocks
     private TestGenerationService testGenerationService;

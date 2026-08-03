@@ -14,7 +14,8 @@ public abstract class AbstractLlmAgent implements AiAgent {
 
     protected AiAgentResult runAgent(AiAgentContext context, String title, String instructions, String fallback) {
         try {
-            String response = llmService.generateTestCase(buildPrompt(context, instructions), "AGENT");
+            // Rol bazlı callType: LlmReportStore'da ajan başına süre/başarı telemetrisi görünür
+            String response = llmService.generateTestCase(buildPrompt(context, instructions), "AGENT_" + role().name());
             if (response != null && !response.isBlank()) {
                 return new AiAgentResult(role(), title, clean(response));
             }
@@ -37,7 +38,6 @@ public abstract class AbstractLlmAgent implements AiAgent {
                 User story: %s
                 Swagger URL: %s
                 Application URL: %s
-                App package: %s
                 Ek bağlam: %s
 
                 Önceki agent çıktıları:
@@ -62,7 +62,6 @@ public abstract class AbstractLlmAgent implements AiAgent {
                 valueOrDash(request.getUserStory()),
                 valueOrDash(request.getSwaggerUrl()),
                 valueOrDash(request.getApplicationUrl()),
-                valueOrDash(request.getAppPackage()),
                 valueOrDash(request.getAdditionalContext()),
                 context.previousOutputs(),
                 instructions

@@ -61,7 +61,7 @@ else
 fi
 
 # ── 3. Ollama modeli çek ───────────────────────────────────────
-MODEL="gemma4:31b-cloud"
+MODEL="llama3.1"
 if [ "$OLLAMA_RUNNING" = true ]; then
   info "Model kontrol ediliyor: $MODEL"
   if ollama list 2>/dev/null | grep -q "$MODEL"; then
@@ -72,7 +72,7 @@ if [ "$OLLAMA_RUNNING" = true ]; then
     ok "Model indirildi: $MODEL"
   fi
 else
-  warn "Lütfen uygulamayı çalıştırmadan önce Ollama'yı manuel kurup çalıştırın ve 'ollama run gemma4:31b-cloud' komutunu çalıştırın."
+  warn "Lütfen uygulamayı çalıştırmadan önce Ollama'yı manuel kurup çalıştırın ve 'ollama run llama3.1' komutunu çalıştırın."
 fi
 
 # ── 4. .env dosyası ────────────────────────────────────────────

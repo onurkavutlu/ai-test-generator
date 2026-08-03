@@ -19,11 +19,11 @@ public class TestGenerationRequest {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private TestType testType;           // BACKEND_API | FRONTEND_WEB | MOBILE
+    private TestType testType;           // BACKEND_API | FRONTEND_WEB
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private TestFramework framework;     // KARATE | SELENIUM | APPIUM
+    private TestFramework framework;     // KARATE | SELENIUM
 
     @Column(columnDefinition = "TEXT")
     private String userStory;           // "Kullanıcı login olabilmeli"
@@ -35,10 +35,13 @@ public class TestGenerationRequest {
     private String applicationUrl;      // FE için base url
 
     @Column(columnDefinition = "TEXT")
-    private String appPackage;          // Mobile için app package
+    private String additionalContext;   // Ekstra bilgi
 
     @Column(columnDefinition = "TEXT")
-    private String additionalContext;   // Ekstra bilgi
+    private String rawPayload;          // cURL, JSON veya XML payload verisi
+
+    @Column(columnDefinition = "VARCHAR(20)")
+    private String payloadType;         // CURL, JSON, XML vs.
 
     @Enumerated(EnumType.STRING)
     @Builder.Default

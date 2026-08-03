@@ -31,6 +31,7 @@ public class FailureAnalysisService {
 
     private final LlmService llmService;
     private final GeneratedTestCaseRepository testCaseRepository;
+    private final com.testgen.service.AgentLearningService agentLearningService;
 
     @Value("${test-generator.runner.max-heal-attempts:3}")
     private int maxHealAttempts;
@@ -86,34 +87,41 @@ public class FailureAnalysisService {
 
             String cleanContent = failedCase.getFramework() == TestFramework.KARATE
                     ? CodeCleaner.cleanFeatureContent(llmRaw)
-                    : CodeCleaner.cleanJavaContent(llmRaw);
+                    // Java: dosya adı korunuyor → class adı da dosya adıyla eşitlenmeli (javac kuralı)
+                    : CodeCleaner.normalizeGeneratedJavaTest(
+                            CodeCleaner.cleanJavaContent(llmRaw), failedCase.getTestName());
 
             if (cleanContent.isBlank()) {
                 log.warn("LLM boş içerik döndürdü — failedCase: {}", failedCase.getTestName());
                 return null;
             }
 
-            String newName = failedCase.getTestName().replaceAll("_Fixed_v\\d+$", "")
-                    + "_Fixed_v" + nextVersion;
-            String ext = failedCase.getFramework() == TestFramework.KARATE ? ".feature" : ".java";
+            // Orijinal dosyanın üzerine yazmak istiyoruz, aksi takdirde diskte hem bozuk eski dosya
+            // hem de yeni dosya kalır ve TestRunner ikisini de çalıştırır. Ayrıca Java'da dosya adı
+            // değişirse içindeki 'public class' adıyla uyuşmaz ve derleme hatası verir.
+            String newName = failedCase.getTestName();
 
             // Orijinal case'i supersede edilmiş olarak işaretle + heal count artır
             failedCase.setSuperseded(true);
             failedCase.setHealAttempts(nextVersion);
             testCaseRepository.save(failedCase);
 
-            log.info("✅ SELF-HEALING BAŞARILI v{}: {} → {}", nextVersion, failedCase.getTestName(), newName);
+            // Ders çıkar: aynı servise sonraki üretimlerde bu hata varsayımı tekrarlanmasın
+            agentLearningService.recordSelfHeal(request, failedCase, nextVersion);
+
+            log.info("✅ SELF-HEALING BAŞARILI v{}: {} (Orijinal dosyanın üzerine yazılacak)", nextVersion, failedCase.getTestName());
 
             return GeneratedTestCase.builder()
                     .testName(newName)
-                    .fileName(newName + ext)
+                    .fileName(failedCase.getFileName())
                     .testContent(cleanContent)
                     .testSummary("[AUTO-FIX][v" + nextVersion + "] "
                             + failedCase.getTestName() + " başarısız olduğu için LLM tarafından yeniden üretildi.")
                     .framework(failedCase.getFramework())
                     .runStatus(TestRunStatus.NOT_RUN)
                     .parentCaseId(failedCase.getId())
-                    .healAttempts(0)
+                    // Parent'ın deneme sayısını devral — sıfırlanırsa heal zinciri maxHealAttempts limitini aşar
+                    .healAttempts(nextVersion)
                     .llmDurationMs(durationMs)
                     .llmPromptChars(prompt.length())
                     .llmResponseChars(llmRaw.length())
@@ -158,7 +166,10 @@ public class FailureAnalysisService {
                 2. Assertion'ları API kontratına göre düzelt
                 3. Edge case'leri genişlet (404, 400, idempotency vb.)
                 4. Her senaryo bağımsız çalışabilir olsun
-                5. Yalnızca düzeltilmiş %s test kodunu döndür — açıklama ekleme
+                5. SELENIUM ise: driver'ı YALNIZCA `DriverFactory.createDriver()` ile oluştur
+                   (DriverFactory projede hazır — tanımlama; ChromeDriver/RemoteWebDriver'ı doğrudan kurma),
+                   @AfterEach içinde driver.quit() çağır
+                6. Yalnızca düzeltilmiş %s test kodunu döndür — açıklama ekleme
 
                 Düzeltilmiş test:
                 """.formatted(

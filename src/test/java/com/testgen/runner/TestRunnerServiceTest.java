@@ -4,7 +4,6 @@ import com.testgen.model.*;
 import com.testgen.report.ReportOrchestrator;
 import com.testgen.repository.GeneratedTestCaseRepository;
 import com.testgen.repository.TestGenerationRequestRepository;
-import com.testgen.service.MockDataGenerationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -39,9 +38,12 @@ public class TestRunnerServiceTest {
     @Mock
     private GeneratedJavaTestProjectService javaTestProjectService;
 
-    @Mock
-    private MockDataGenerationService mockDataGenerationService;
 
+    @Mock
+    private com.testgen.service.AgentLearningService agentLearningService;
+
+    @Mock
+    private com.testgen.service.TestSuiteService testSuiteService;
     @InjectMocks
     private TestRunnerService testRunnerService;
 
@@ -58,7 +60,6 @@ public class TestRunnerServiceTest {
                 .build();
 
         when(testCaseRepository.findById("case-123")).thenReturn(Optional.of(tc));
-        when(mockDataGenerationService.redirectKarateUrl("Feature: test")).thenReturn("Feature: test-redirected");
         when(karateRunner.run(any(GeneratedTestCase.class))).thenReturn(TestRunResult.ofMaven(true, "Karate results summary", 1, 0));
         when(testCaseRepository.findByRequestId("req-123")).thenReturn(List.of(tc));
 
@@ -67,10 +68,7 @@ public class TestRunnerServiceTest {
 
         assertNotNull(result);
         assertEquals(TestRunStatus.PASSED, result.getRunStatus());
-        assertEquals("Feature: test-redirected", result.getTestContent());
 
-        verify(mockDataGenerationService, times(1)).generateMockDataForTestCase(any(GeneratedTestCase.class));
-        verify(mockDataGenerationService, times(1)).redirectKarateUrl("Feature: test");
         verify(karateRunner, times(1)).run(any(GeneratedTestCase.class));
         verify(reportOrchestrator, times(1)).generateAndSend(eq(request), anyList());
         verify(testCaseRepository, atLeastOnce()).save(tc);
@@ -90,13 +88,11 @@ public class TestRunnerServiceTest {
 
         when(requestRepository.findById("req-123")).thenReturn(Optional.of(request));
         when(testCaseRepository.findByRequestId("req-123")).thenReturn(List.of(tc));
-        when(mockDataGenerationService.redirectKarateUrl("Feature: test")).thenReturn("Feature: test-redirected");
         when(karateRunner.run(any(GeneratedTestCase.class))).thenReturn(TestRunResult.ofMaven(true, "Passed", 1, 0));
 
         CompletableFuture<Void> future = testRunnerService.runAllForRequest("req-123", null);
         future.get();
 
-        verify(mockDataGenerationService, times(1)).generateMockDataForTestCase(any(GeneratedTestCase.class));
         verify(karateRunner, times(1)).run(any(GeneratedTestCase.class));
         verify(reportOrchestrator, times(1)).generateAndSend(eq(request), anyList(), eq(null));
     }

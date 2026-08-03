@@ -41,7 +41,6 @@ RUN addgroup -S testgen && adduser -S -h /home/testgen -G testgen testgen
 # Çalışma dizinleri
 RUN mkdir -p /tmp/generated-tests/karate \
              /tmp/generated-tests/selenium \
-             /tmp/generated-tests/appium \
              /tmp/generated-tests/allure-results \
              /tmp/generated-tests/allure-report \
              /home/testgen/.m2 \

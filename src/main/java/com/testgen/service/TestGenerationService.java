@@ -1,8 +1,8 @@
 package com.testgen.service;
 
 import com.testgen.generator.KarateTestGenerator;
+import com.testgen.generator.RestAssuredTestGenerator;
 import com.testgen.generator.SeleniumTestGenerator;
-import com.testgen.generator.AppiumTestGenerator;
 import com.testgen.model.*;
 import com.testgen.repository.TestGenerationRequestRepository;
 import com.testgen.repository.GeneratedTestCaseRepository;
@@ -23,11 +23,13 @@ public class TestGenerationService {
 
     private final KarateTestGenerator karateTestGenerator;
     private final SeleniumTestGenerator seleniumTestGenerator;
-    private final AppiumTestGenerator appiumTestGenerator;
+    private final RestAssuredTestGenerator restAssuredTestGenerator;
     private final TestGenerationRequestRepository requestRepository;
     private final GeneratedTestCaseRepository testCaseRepository;
     private final AiAgentOrchestratorService aiAgentOrchestratorService;
     private final AiTestDataGenerationService aiTestDataGenerationService;
+    private final AgentLearningService agentLearningService;
+    private final ObservationService observationService;
 
     @Transactional
     public TestGenerationRequest createRequest(TestGenerationRequest request) {
@@ -48,6 +50,11 @@ public class TestGenerationService {
             request.setStatus(RequestStatus.GENERATING);
             requestRepository.save(request);
 
+            // 1) ÖNCE GÖZLEMLE: hedeften gerçek veri topla — ajanlar tahmin etmesin
+            request.setAdditionalContext(observationService.enrichWithObservations(request));
+            // 2) Geçmiş koşum dersleri: aynı servisin bilinen tuzakları
+            request.setAdditionalContext(agentLearningService.enrichWithLearnings(request));
+            // 3) Ajan analizi: gözlem + dersler ışığında
             request.setAdditionalContext(aiAgentOrchestratorService.enrichAdditionalContext(request));
             request.setAdditionalContext(aiTestDataGenerationService.enrichAdditionalContext(request));
             requestRepository.save(request);
@@ -56,7 +63,7 @@ public class TestGenerationService {
             cases = switch (request.getFramework()) {
                 case KARATE  -> karateTestGenerator.generate(request);
                 case SELENIUM -> seleniumTestGenerator.generate(request);
-                case APPIUM  -> appiumTestGenerator.generate(request);
+                case REST_ASSURED -> restAssuredTestGenerator.generate(request);
             };
 
             if (cases.isEmpty()) {

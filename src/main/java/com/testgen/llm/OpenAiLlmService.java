@@ -23,7 +23,7 @@ public class OpenAiLlmService implements LlmService {
 
     private static final String SYSTEM_PROMPT = """
             Sen uzman bir test otomasyon mühendisisin.
-            Görevin: Karate DSL, Selenium (Java/Page Object Model) ve Appium kullanarak
+            Görevin: Karate DSL ve Selenium (Java/Page Object Model) kullanarak
             production-ready, kapsamlı test case'leri üretmek.
 
             Kurallar:
@@ -77,13 +77,24 @@ public class OpenAiLlmService implements LlmService {
     }
 
     @Override
+    public String generateFromRawPayload(String rawPayload, String payloadType, String context) {
+        return generateTestCase(PromptTemplates.buildRawPayloadPrompt(rawPayload, payloadType, context), "KARATE");
+    }
+
+    @Override
+    public String generateFromGraphQL(String graphqlDetails, String context) {
+        return generateTestCase(PromptTemplates.buildGraphQLPrompt(graphqlDetails, context), "KARATE");
+    }
+
+    @Override
+    public String generateFromSoap(String soapXml, String context) {
+        return generateTestCase(PromptTemplates.buildSoapPrompt(soapXml, context), "KARATE");
+    }
+
+    @Override
     public String generateSeleniumTest(String pageUrl, String userStory, String htmlHint) {
         return generateTestCase(PromptTemplates.buildSeleniumPrompt(pageUrl, userStory, htmlHint), "SELENIUM");
     }
 
-    @Override
-    public String generateAppiumTest(String appPackage, String userStory, String platform, String additionalContext) {
-        return generateTestCase(PromptTemplates.buildAppiumPrompt(appPackage, userStory, platform, additionalContext),
-                "APPIUM");
-    }
+
 }

@@ -36,7 +36,7 @@ Sistemdeki 8 farklı LLM ajanı, yazılım döngüsünü taklit ederek sıralı 
 
 ## Kullanılan LLM Modeli
 
-Projede varsayılan olarak **`gemma4:31b-cloud`** modeli kullanılmaktadır. Google'ın güçlü Gemma 4 serisinden olan bu model, 256K geniş bağlam (context window) kapasitesi sayesinde karmaşık Swagger dosyalarını ve çoklu ajan iletişimlerini tek seferde eksiksiz analiz edebilir. Altyapı istenirse Ollama üzerinden farklı yerel modellere de kolayca adapte edilebilecek şekilde geliştirilmiştir.
+Projede varsayılan olarak **`llama3.1`** modeli kullanılmaktadır. Açık kaynak olan bu model Tool Calling (Ajan yetenekleri) özelliğini destekler. Altyapı istenirse Ollama üzerinden farklı yerel modellere de kolayca adapte edilebilecek şekilde geliştirilmiştir.
 
 ---
 

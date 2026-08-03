@@ -5,10 +5,9 @@
 #  Yapılanlar:
 #    1. Karate (API) test üret + koştur
 #    2. Selenium (Web) test üret + koştur
-#    3. Appium (Mobil) test üret + koştur
-#    4. Hatalı test case ekle
-#    5. Scheduler'ı tetikle → AI hatalı case'i analiz edip iyileştirir
-#    6. Allure & MailHog linklerini göster
+#    3. Hatalı test case ekle
+#    4. Scheduler'ı tetikle → AI hatalı case'i analiz edip iyileştirir
+#    5. Allure & MailHog linklerini göster
 #
 #  Kullanım: chmod +x demo-full-flow.sh && ./demo-full-flow.sh
 # ═══════════════════════════════════════════════════════════════
@@ -103,7 +102,7 @@ clear
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
 echo "║         AI Test Generator — Full Demo Akışı            ║"
-echo "║   Karate · Selenium · Appium · Hata Düzeltme · Rapor   ║"
+echo "║      Karate · Selenium · Hata Düzeltme · Rapor         ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -159,32 +158,7 @@ fi
 pause
 
 # ══════════════════════════════════════════════════════════════
-section "ADIM 3 — Appium (Mobil) Testi Üretimi"
-# ══════════════════════════════════════════════════════════════
-
-APPIUM_PAYLOAD='{
-  "testType": "MOBILE",
-  "framework": "APPIUM",
-  "appPackage": "com.saucelabs.mydemoapp.android",
-  "userStory": "Kullanıcı mobil uygulamaya e-posta ve şifre ile giriş yapabilmeli, boş bırakılınca hata görmeli, başarılı girişte ana sayfa yüklenmeli",
-  "additionalContext": "Android 13, Sauce Labs My Demo App"
-}'
-
-APPIUM_ID=$(generate_tests "Appium / MyDemo Android" "$APPIUM_PAYLOAD")
-ok "RequestId: $APPIUM_ID"
-
-APPIUM_STATUS=$(wait_generated "$APPIUM_ID" | tail -1)
-if [ "$APPIUM_STATUS" = "GENERATED" ]; then
-  ok "Appium testleri üretildi:"
-  list_cases "$APPIUM_ID"
-else
-  warn "Üretim tamamlanamadı ($APPIUM_STATUS)"
-fi
-
-pause
-
-# ══════════════════════════════════════════════════════════════
-section "ADIM 4 — Hatalı Test Case Ekleme"
+section "ADIM 3 — Hatalı Test Case Ekleme"
 # ══════════════════════════════════════════════════════════════
 
 info "Kasıtlı olarak hatalı (başarısız olacak) bir Karate test case'i Karate isteğine ekleniyor..."
@@ -276,8 +250,7 @@ run_and_report "$KARATE_ID" "qa@testgen.local"
 info "Selenium testleri koşturuluyor..."
 run_and_report "$SELENIUM_ID" "qa@testgen.local"
 
-info "Appium testleri koşturuluyor..."
-run_and_report "$APPIUM_ID" "qa@testgen.local"
+
 
 # ══════════════════════════════════════════════════════════════
 section "ADIM 7 — LLM Üretim Raporu"
@@ -341,7 +314,7 @@ echo "║                   Sonuç Özeti  🎉                       ║"
 echo "╠══════════════════════════════════════════════════════════╣"
 printf "║  %-52s ║\n" "Karate  requestId : $KARATE_ID"
 printf "║  %-52s ║\n" "Selenium requestId: $SELENIUM_ID"
-printf "║  %-52s ║\n" "Appium  requestId : $APPIUM_ID"
+
 echo "╠══════════════════════════════════════════════════════════╣"
 echo "║  Allure Raporu  → http://localhost:8888                 ║"
 echo "║  Email Inbox    → http://localhost:8025                 ║"

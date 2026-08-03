@@ -169,8 +169,7 @@ public class DailySchedulerService {
         try {
             return switch (tc.getFramework()) {
                 case KARATE   -> karateRunner.run(tc);
-                case SELENIUM -> runMavenTest(tc, "selenium");
-                case APPIUM   -> runMavenTest(tc, "appium");
+                case SELENIUM, REST_ASSURED -> runMavenTest(tc, tc.getFramework().name().toLowerCase());
             };
         } catch (Exception e) {
             log.error("Test koşumu hata verdi: {}", tc.getTestName(), e);

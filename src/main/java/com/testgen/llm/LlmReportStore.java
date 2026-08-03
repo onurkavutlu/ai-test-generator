@@ -1,5 +1,8 @@
 package com.testgen.llm;
 
+import com.testgen.model.LlmCallLog;
+import com.testgen.repository.LlmCallLogRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -7,16 +10,17 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * In-memory LLM çağrı geçmişi.
- * Son MAX_SIZE çağrıyı tutar; uygulama yeniden başlayınca sıfırlanır.
- * Kalıcı saklama istenirse DB'ye taşınabilir.
+ * LLM çağrı geçmişi: hızlı erişim için in-memory (son MAX_SIZE),
+ * kalıcı izlenebilirlik için llm_call_logs tablosuna da yazar.
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class LlmReportStore {
 
     private static final int MAX_SIZE = 500;
 
+    private final LlmCallLogRepository callLogRepository;
     private final List<LlmCallReport> reports = new CopyOnWriteArrayList<>();
 
     public void record(LlmCallReport report) {
@@ -24,6 +28,7 @@ public class LlmReportStore {
             reports.remove(0);
         }
         reports.add(report);
+        persist(report);
 
         // Konsola anında görünür özet
         if (report.success()) {
@@ -41,6 +46,25 @@ public class LlmReportStore {
             log.warn("│  Tip    : {}", report.callType());
             log.warn("│  Hata   : {}", report.errorMessage());
             log.warn("└───────────────────────────────────────────────────");
+        }
+    }
+
+    /** DB yazımı best-effort: log kaybı LLM akışını asla durdurmamalı. */
+    private void persist(LlmCallReport report) {
+        try {
+            callLogRepository.save(LlmCallLog.builder()
+                    .model(report.model())
+                    .callType(report.callType())
+                    .promptSummary(report.promptSummary())
+                    .promptChars(report.promptChars())
+                    .responseChars(report.responseChars())
+                    .durationMs(report.durationMs())
+                    .success(report.success())
+                    .errorMessage(report.errorMessage())
+                    .calledAt(report.calledAt())
+                    .build());
+        } catch (Exception e) {
+            log.warn("LLM çağrı kaydı DB'ye yazılamadı: {}", e.getMessage());
         }
     }
 

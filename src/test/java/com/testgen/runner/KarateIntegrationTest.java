@@ -13,8 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
  * "Test" son ekiyle bittiği için "mvn test" esnasında otomatik olarak çalıştırılır.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-    "spring.datasource.url=jdbc:h2:mem:karate_integration_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE",
-    "test-generator.seeding.enabled=false"
+    "spring.datasource.url=jdbc:h2:mem:karate_integration_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"
 })
 @ActiveProfiles("local")
 public class KarateIntegrationTest {
