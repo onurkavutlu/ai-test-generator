@@ -146,20 +146,27 @@ public class AllureReportService {
     }
 
     /**
-     * allure CLI olmadığında basit HTML özet raporu üretir.
+     * allure CLI yokken NEDENİNİ açıklayan yer tutucu sayfa yazar ve BAŞARISIZ döner.
+     *
+     * <p>Önceden burası {@code AllureReportResult.success(...)} dönüyordu: Allure hiç
+     * çalışmamışken sistem raporu üretilmiş sayıyor, e-postaya "Allure raporu" linki
+     * koyuyordu. Kullanıcı tıklayınca test sonucu değil bir özür sayfası buluyordu —
+     * yani rapor <b>uydurulmuş</b> oluyordu.
+     *
+     * <p>Yer tutucu sayfa yine yazılır (dizine doğrudan bakan biri nedeni görsün diye),
+     * ama çağırana durum açıkça başarısız bildirilir; böylece e-postaya ölü link girmez.
      */
     private AllureReportResult generateFallbackReport(String requestId, Path reportDir) {
+        String reason = "Allure CLI bulunamadığından HTML rapor üretilemedi.";
         try {
             Files.createDirectories(reportDir);
-            Path indexHtml = reportDir.resolve("index.html");
-            // Minimal HTML template
-            String html = buildFallbackHtml(requestId);
-            Files.writeString(indexHtml, html, StandardCharsets.UTF_8);
-            String reportUrl = allureReportUrl + "/" + requestId + "/index.html";
-            return AllureReportResult.success(reportDir.toString(), reportUrl);
+            Files.writeString(reportDir.resolve("index.html"),
+                    buildFallbackHtml(requestId), StandardCharsets.UTF_8);
+            log.warn("{} Yer tutucu sayfa yazıldı: {}", reason, reportDir);
         } catch (IOException e) {
-            return AllureReportResult.failed("Fallback rapor üretilemedi: " + e.getMessage());
+            log.warn("{} Yer tutucu sayfa da yazılamadı: {}", reason, e.getMessage());
         }
+        return AllureReportResult.failed(reason);
     }
 
     // ─────────────────────────────────────────────────────────

@@ -12,7 +12,17 @@ public abstract class AbstractLlmAgent implements AiAgent {
 
     protected final LlmService llmService;
 
-    protected AiAgentResult runAgent(AiAgentContext context, String title, String instructions, String fallback) {
+    /**
+     * Ajanı koşturur ve YALNIZCA gerçek LLM çıktısını döndürür.
+     *
+     * <p><b>Yedek metin YOKTUR — bilinçli.</b> Önceden her ajan, LLM erişilemediğinde
+     * kullanılmak üzere hazır yazılmış bir "analiz" metni taşıyordu. Bu metin bugün
+     * kullanılmıyordu ama kodda durduğu sürece tek satırlık bir değişiklikle gerçek
+     * ajan çıktısı gibi servis edilebilirdi. Uydurma analiz, uydurma testten daha
+     * tehlikelidir: sonraki ajanlar ve üretim onu GÖZLEM sanıp üstüne inşa eder.
+     * Bu yüzden parametre tamamen kaldırıldı; LLM konuşamıyorsa üretim durur.
+     */
+    protected AiAgentResult runAgent(AiAgentContext context, String title, String instructions) {
         try {
             // Rol bazlı callType: LlmReportStore'da ajan başına süre/başarı telemetrisi görünür
             String response = llmService.generateTestCase(buildPrompt(context, instructions), "AGENT_" + role().name());

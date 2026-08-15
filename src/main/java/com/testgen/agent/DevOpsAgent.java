@@ -18,11 +18,6 @@ public class DevOpsAgent extends AbstractLlmAgent {
     @Override
     public AiAgentResult analyze(AiAgentContext context) {
         return runAgent(context, "DevOps Agent",
-                "Environment, pipeline, artifact, observability ve rapor gereksinimlerini çıkar.",
-                """
-                Koşum ortamı gerekli env var, browser/selenium server ve mock servis bilgilerini açıkça taşımalı.
-                Pipeline çıktıları test source, surefire/karate output, Allure result ve HTML raporu artifact olarak saklamalı.
-                Health, log ve failure trend bilgileri rapor özetine bağlanmalı.
-                """);
+                "Environment, pipeline, artifact, observability ve rapor gereksinimlerini çıkar.");
     }
 }

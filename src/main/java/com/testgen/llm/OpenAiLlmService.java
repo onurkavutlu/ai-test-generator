@@ -53,11 +53,26 @@ public class OpenAiLlmService implements LlmService {
         log.info("OpenAI LLM Service başlatıldı — model: {}", model);
     }
 
+    /**
+     * Test kurulumu için: hazır bir model enjekte eder.
+     *
+     * <p>Üretim yapıcısı modeli KENDİSİ kurduğu için (api-key, base-url ile) davranışı
+     * ağ olmadan doğrulanamıyordu. Mock yedeği kaldırıldıktan sonra "LLM hatası sessizce
+     * yutulmuyor" kuralının testle kilitlenmesi gerekiyor; bu yapıcı onun içindir.
+     */
+    OpenAiLlmService(ChatLanguageModel chatModel) {
+        this.chatModel = chatModel;
+    }
+
     @Override
     public String generateTestCase(String prompt) {
         return generateTestCase(prompt, null);
     }
 
+    /**
+     * @param frameworkOverride yalnızca çağrı tipini etiketlemek için; üretim davranışını
+     *                          değiştirmez (mock yedeği kaldırıldığından beri).
+     */
     public String generateTestCase(String prompt, String frameworkOverride) {
         log.debug("OpenAI'ya istek gönderiliyor");
         try {
@@ -66,8 +81,13 @@ public class OpenAiLlmService implements LlmService {
                     UserMessage.from(prompt));
             return response.content().text();
         } catch (Exception e) {
-            log.warn("OpenAI API çağrısı başarısız oldu: {}. Mock jeneratör devreye giriyor...", e.getMessage());
-            return MockGenerator.generateFallback(prompt, frameworkOverride);
+            // MOCK YEDEĞİ YOK — bilinçli karar. Önceden LLM erişilemediğinde sahte içerik
+            // üretilip normal çıktı gibi döndürülüyordu: üretim "başarılı" görünüyor, testler
+            // koşuyor ama doğruladıkları şey uydurma bir şablondu. Kök neden (LLM kapalı)
+            // yalnızca WARN logunda kalıyor, kullanıcı asla görmüyordu.
+            // Ollama yolu bu kararı zaten uyguluyordu; OpenAI yolu da aynı olmalı.
+            log.error("OpenAI çağrısı başarısız — sahte içerik ÜRETİLMEZ: {}", e.getMessage());
+            throw new LlmException("OpenAI servisi yanıt vermedi: " + e.getMessage(), e);
         }
     }
 
