@@ -60,6 +60,9 @@ public class AiAgentOrchestratorServiceTest {
 
         AiAgentOrchestratorService service =
                 new AiAgentOrchestratorService(List.of(secOps, report, developer), mockModel, Mockito.mock(AgentAnalysisRepository.class));
+        // Sira dogrulamasi ozet ajanini da icerdigi icin FULL mod
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "agentMode",
+                com.testgen.agent.AgentRouting.Mode.FULL);
 
         String enriched = service.enrichAdditionalContext(backendRequest);
 
@@ -73,14 +76,80 @@ public class AiAgentOrchestratorServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    public void supervisorThatCallsNoToolFallsBackToSequentialAgents() {
+        // llama3.1 canlıda istisna fırlatmadan, tool ÇAĞIRMAK yerine tool çağrısını
+        // ANLATAN metin döndürebiliyor — bu durumda hiçbir ajan koşmaz ama sistem
+        // başarılı görünürdü. Ajanlar tanımlıysa fallback devreye girmeli.
+        ChatLanguageModel mockModel = Mockito.mock(ChatLanguageModel.class);
+        Response<AiMessage> pseudoToolCall = Response.from(
+                AiMessage.from("```json\n{ \"name\": \"askDeveloper\", \"parameters\": {} }\n```"),
+                new TokenUsage(10, 10));
+        when(mockModel.generate(anyList())).thenReturn(pseudoToolCall);
+        when(mockModel.generate(anyList(), anyList())).thenReturn(pseudoToolCall);
+
+        AiAgent developer = fixedAgent(AiAgentRole.DEVELOPER, "Developer Agent", "api kontrati");
+        AiAgent report    = fixedAgent(AiAgentRole.REPORT, "Report Agent", "yonetici ozeti");
+
+        AiAgentOrchestratorService service = new AiAgentOrchestratorService(
+                List.of(developer, report), mockModel, Mockito.mock(AgentAnalysisRepository.class));
+
+        String enriched = service.enrichAdditionalContext(backendRequest);
+
+        assertTrue(enriched.contains("Fallback"), "ajan çağrılmadıysa fallback koşmalı");
+        assertTrue(enriched.contains("api kontrati"));
+        // LEAN (varsayilan): ozet ajani test uretimini etkilemedigi icin kosmaz
+        assertTrue(!enriched.contains("yonetici ozeti"), "LEAN modda REPORT ajani kosmamali");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void leanModeRunsFewerAgentsThanFull() {
+        // Ajan katmani KUCULTULDU ama yapi korundu: ayni siniflar, ayni zincir,
+        // yalnizca cagrilan ajan sayisi azaldi.
+        TestGenerationRequest frontend = TestGenerationRequest.builder()
+                .testType(TestType.FRONTEND_WEB)
+                .framework(TestFramework.SELENIUM)
+                .build();
+
+        var lean = com.testgen.agent.AgentRouting.resolve(frontend, com.testgen.agent.AgentRouting.Mode.LEAN);
+        var full = com.testgen.agent.AgentRouting.resolve(frontend, com.testgen.agent.AgentRouting.Mode.FULL);
+
+        assertEquals(3, lean.size(), "FRONTEND_WEB LEAN: PM + Analyst + Automation");
+        assertEquals(6, full.size(), "FULL: + SecOps, Performance, Report");
+        assertTrue(!lean.contains(AiAgentRole.REPORT), "ozet ajani LEAN'de kosmaz");
+        assertTrue(full.contains(AiAgentRole.REPORT));
+        // Zorunlu ajanlar her iki modda da korunur
+        assertTrue(lean.containsAll(com.testgen.agent.AgentRouting.mandatory(frontend)));
+        assertTrue(full.containsAll(com.testgen.agent.AgentRouting.mandatory(frontend)));
+    }
+
+    @Test
+    public void routingPlanMatchesTheAgentsThatActuallyRun() {
+        // Plan artik yalnizca bir oneri degil: kosan liste ile AYNI kaynaktan uretilir.
+        AiAgentOrchestratorService service = new AiAgentOrchestratorService(
+                List.of(), Mockito.mock(ChatLanguageModel.class), Mockito.mock(AgentAnalysisRepository.class));
+
+        String plan = service.buildRoutingPlan(backendRequest);
+        var running = com.testgen.agent.AgentRouting.resolve(backendRequest, com.testgen.agent.AgentRouting.Mode.LEAN);
+
+        for (AiAgentRole role : running) {
+            assertTrue(plan.contains(com.testgen.agent.AgentRouting.toolNameOf(role)),
+                    "plan kosacak ajani icermeli: " + role);
+        }
+        assertTrue(plan.contains("ÇAĞIRMA: "), "kosmayacak ajanlar acikca yasaklanmali");
+        assertTrue(plan.contains("askReportAgent"), "LEAN'de REPORT cagrilmamali olarak listelenmeli");
+    }
+
+    @Test
     public void routingPlanAdaptsToRequestType() {
         AiAgentOrchestratorService service =
                 new AiAgentOrchestratorService(List.of(), Mockito.mock(ChatLanguageModel.class), Mockito.mock(AgentAnalysisRepository.class));
 
         // BACKEND_API + user story yok → PM gereksiz
         String backendPlan = service.buildRoutingPlan(backendRequest);
-        assertTrue(backendPlan.contains("ZORUNLU: askDeveloper"));
-        assertTrue(backendPlan.contains("GEREKSİZ: askProductManager"));
+        assertTrue(backendPlan.contains("askDeveloper"));
+        assertTrue(backendPlan.contains("ÇAĞIRMA: ") && backendPlan.contains("askProductManager"));
 
         // BACKEND_API + user story var → PM zorunlu
         TestGenerationRequest withStory = TestGenerationRequest.builder()
@@ -88,7 +157,7 @@ public class AiAgentOrchestratorServiceTest {
                 .framework(TestFramework.KARATE)
                 .userStory("Kullanıcı pet ekleyebilmeli")
                 .build();
-        assertTrue(service.buildRoutingPlan(withStory).contains("ZORUNLU: askProductManager"));
+        assertTrue(service.buildRoutingPlan(withStory).contains("askProductManager"));
 
         // FRONTEND_WEB → PM zorunlu, Developer gereksiz
         TestGenerationRequest frontend = TestGenerationRequest.builder()
@@ -96,8 +165,8 @@ public class AiAgentOrchestratorServiceTest {
                 .framework(TestFramework.SELENIUM)
                 .build();
         String frontendPlan = service.buildRoutingPlan(frontend);
-        assertTrue(frontendPlan.contains("ZORUNLU: askProductManager"));
-        assertTrue(frontendPlan.contains("GEREKSİZ: askDeveloper"));
+        assertTrue(frontendPlan.contains("askProductManager"));
+        assertTrue(frontendPlan.contains("ÇAĞIRMA: ") && frontendPlan.contains("askDeveloper"));
 
         // Raw payload notu
         TestGenerationRequest rawPayload = TestGenerationRequest.builder()
@@ -137,5 +206,44 @@ public class AiAgentOrchestratorServiceTest {
                 return new AiAgentResult(role, title, output);
             }
         };
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void supervisorCannotCallAgentsOutsideThePlan() {
+        // CANLIDA OLCULDU: LEAN modda plan "cagirma" dedigi halde model askReportAgent'i
+        // yine cagirdi. Plan artik tool yolunda da baglayici.
+        AiAgent developer = fixedAgent(AiAgentRole.DEVELOPER, "Developer Agent", "api kontrati");
+        AiAgent report    = fixedAgent(AiAgentRole.REPORT, "Report Agent", "yonetici ozeti");
+        AiAgentContext context = new AiAgentContext(backendRequest);
+
+        var allowed = com.testgen.agent.AgentRouting.resolve(
+                backendRequest, com.testgen.agent.AgentRouting.Mode.LEAN);
+        com.testgen.agent.AgentTools tools = new com.testgen.agent.AgentTools(
+                backendRequest, List.of(developer, report), context, allowed);
+
+        String devOut = tools.askDeveloper("kontrat");
+        String reportOut = tools.askReportAgent("ozet");
+
+        assertEquals("api kontrati", devOut, "plandaki ajan normal kosmali");
+        assertTrue(reportOut.contains("çağrılmayacak"), "plan disi ajan kosturulmamali");
+        assertEquals(1, context.results().size(), "yalnizca plandaki ajan baglama eklenmeli");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void sameAgentIsNotRunTwice() {
+        AiAgent developer = fixedAgent(AiAgentRole.DEVELOPER, "Developer Agent", "api kontrati");
+        AiAgentContext context = new AiAgentContext(backendRequest);
+        com.testgen.agent.AgentTools tools = new com.testgen.agent.AgentTools(
+                backendRequest, List.of(developer), context,
+                com.testgen.agent.AgentRouting.resolve(backendRequest,
+                        com.testgen.agent.AgentRouting.Mode.LEAN));
+
+        tools.askDeveloper("bir");
+        String ikinci = tools.askDeveloper("iki");
+
+        assertTrue(ikinci.contains("zaten çağrıldı"));
+        assertEquals(1, context.results().size(), "tekrar cagri maliyet uretmemeli");
     }
 }
