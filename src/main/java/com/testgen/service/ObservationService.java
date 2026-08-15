@@ -36,7 +36,24 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Service
+@lombok.RequiredArgsConstructor
 public class ObservationService {
+
+    /**
+     * Problanan yanıtlardan doğrulama gerçeklerini türetir.
+     *
+     * NEDEN: Gözlem bloğuna ham gövde yazmak modele "şu alanlar var" demiyordu; model
+     * gövdeyi yanlış okuyup olmayan alana assertion yazıyordu. Türetilmiş gerçekler
+     * (ör. "$.status : #string") tek anlamlıdır ve aynı liste deterministik teste derlenir.
+     */
+    private final com.testgen.runner.ResponseAssertionDeriver assertionDeriver;
+
+    /**
+     * SSRF kapısı. Gözlem katmanı, kullanıcının verdiği Swagger/uygulama adresine
+     * sunucunun kendi ağından istek atar ve yanıt gövdesini prompt'a — dolayısıyla
+     * kullanıcıya gösterilen ajan raporuna — koyar. Runner ile aynı yüzey.
+     */
+    private final com.testgen.config.OutboundUrlGuard urlGuard;
 
     public static final String SECTION_TITLE = "## OBSERVED";
 
@@ -178,12 +195,44 @@ public class ObservationService {
             } else {
                 sb.append("- GET ").append(path).append(" → ").append(resp.statusCode())
                         .append(" | body: ").append(snippet(resp.body()).replace("\n", " ")).append("\n");
+                // Türetilmiş gerçekler: hangi alan var, hangi tipte. Deterministik test
+                // üretimi bu satırlardan derlenir (bkz. ObservedApiTestBuilder).
+                appendDerivedFacts(sb, resp);
             }
         }
         if (probed == 0) return null;
         sb.append("KURAL: Yukarıdaki gözlenen status/body örnekleri kontratın gerçeğidir; ")
           .append("assertion'ları bunlara hizala, gözlenmeyeni uydurma.");
         return sb.toString();
+    }
+
+    /** Problanan yanıttan türetilen gerçekleri endpoint satırının altına girintili yazar. */
+    private void appendDerivedFacts(StringBuilder sb, HttpResponse<String> resp) {
+        java.util.Map<String, String> headers = new java.util.LinkedHashMap<>();
+        resp.headers().map().forEach((k, v) -> {
+            if (!k.startsWith(":")) {
+                headers.put(k, String.join(", ", v));
+            }
+        });
+        var result = new com.testgen.runner.DirectRequestService.DirectRunResult(
+                resp.statusCode(), 0, headers, resp.body(), null, java.util.List.of());
+
+        for (var a : assertionDeriver.derive(result)) {
+            // Süre gerçeği burada anlamsız: gözlem gecikmesi ölçülmüyor (0 verildi)
+            if (a.type() == com.testgen.runner.HttpAssertion.Type.RESPONSE_TIME) {
+                continue;
+            }
+            sb.append("    ").append(factLine(a)).append('\n');
+        }
+    }
+
+    private static String factLine(com.testgen.runner.HttpAssertion a) {
+        return switch (a.type()) {
+            case STATUS -> "status: " + a.expected();
+            case HEADER -> "header " + a.path() + ": " + a.expected();
+            case JSON_ARRAY_SIZE -> a.path() + " : array[" + a.expected() + "]";
+            default -> a.path() + " : " + a.expected();
+        };
     }
 
     private String resolveBaseUrl(OpenAPI openAPI, String swaggerUrl) {
@@ -213,6 +262,9 @@ public class ObservationService {
 
     private HttpResponse<String> get(String url) {
         try {
+            // Prob atmadan ÖNCE kapıdan geçir. Gözlem best-effort olduğu için reddedilen
+            // adres üretimi durdurmaz; null dönüp "gözlem yapılamadı" notuna düşer.
+            urlGuard.verify(url);
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(PROBE_TIMEOUT)

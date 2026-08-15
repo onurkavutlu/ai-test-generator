@@ -50,6 +50,15 @@ public class TestGenerationServiceTest {
     @Mock
     private ObservationService observationService;
 
+    @Mock
+    private com.testgen.generator.TestContentGate testContentGate;
+
+    @Mock
+    private com.testgen.generator.TestCaseClassifier testCaseClassifier;
+
+    @Mock
+    private com.testgen.metrics.TestGenMetrics metrics;
+
     @InjectMocks
     private TestGenerationService testGenerationService;
 
@@ -101,6 +110,8 @@ public class TestGenerationServiceTest {
 
         verify(aiAgentOrchestratorService, times(1)).enrichAdditionalContext(request);
         verify(aiTestDataGenerationService, times(1)).enrichAdditionalContext(request);
+        // Üretim kapısı her case için çalışmalı — doğrulanmamış içerik DB'ye yazılmaz
+        verify(testContentGate, times(1)).apply(testCase);
         verify(testCaseRepository, times(1)).saveAll(anyList());
         verify(requestRepository, atLeastOnce()).save(request);
     }

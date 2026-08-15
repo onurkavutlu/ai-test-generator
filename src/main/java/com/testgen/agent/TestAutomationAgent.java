@@ -18,12 +18,6 @@ public class TestAutomationAgent extends AbstractLlmAgent {
     @Override
     public AiAgentResult analyze(AiAgentContext context) {
         return runAgent(context, "Test Automation Agent",
-                "Karate/Selenium için koşulabilir otomasyon kapsamı, locator/endpoint ve assertion öner.",
-                """
-                Otomasyon kapsamı frameworke göre koşulabilir dosya üretmeli: Karate feature, Selenium JUnit test.
-                Case seti API, smoke, regression, negative, edge, security ve performance kapsamlarını etiketli senaryolarla kapsamalı.
-                Assertionlar status, response schema, UI mesajı, ekran state, hata senaryoları ve süre/timeout beklentisini kapsamalı.
-                Test çıktısı Allure ve email raporunda okunabilir summary ile dönmeli.
-                """);
+                "Karate/Selenium için koşulabilir otomasyon kapsamı, locator/endpoint ve assertion öner.");
     }
 }

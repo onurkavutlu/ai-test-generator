@@ -38,6 +38,8 @@ public class DirectRequestController {
     private static final int OBSERVED_BODY_MAX = 1500;
 
     private final DirectRequestService directRequestService;
+    /** Gözlenen yanıttan türetilmiş gerçekleri prompt'a yazmak için */
+    private final ResponseAssertionDeriver assertionDeriver;
     private final TestGenerationService testGenerationService;
     private final TestRunnerService testRunnerService;
     private final TestSuiteService testSuiteService;
@@ -156,13 +158,16 @@ public class DirectRequestController {
                 Gözlenen Body (kısaltılmış):
                 %s
 
+                %s
                 KURALLAR (KRİTİK):
                 - Happy path assertion'larını YALNIZCA yukarıdaki gözlenen status ve body alanlarına göre yaz.
                 - Gözlenmeyen alan, status kodu veya header UYDURMA.
                 - Yanıtta auth izi yoksa 401/403 senaryosu YAZMA.
                 - Body'de görmediğin alan için match yazma; gördüğün alanların değer/tiplerini doğrula.
                 """.formatted(method, url, observed.status(), contentType,
-                truncate(observed.body(), OBSERVED_BODY_MAX));
+                truncate(observed.body(), OBSERVED_BODY_MAX),
+                // Ham gövde yanlış okunabiliyor; türetilmiş gerçekler tek anlamlı ve çok daha kısa
+                assertionDeriver.toPromptFacts(observed.assertions()));
     }
 
     private String buildCurl(String method, String url, Map<String, String> headers, String body) {

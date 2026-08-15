@@ -18,11 +18,6 @@ public class ReportAgent extends AbstractLlmAgent {
     @Override
     public AiAgentResult analyze(AiAgentContext context) {
         return runAgent(context, "Report Agent",
-                "Tüm agent çıktılarını email/Allure özetine girecek kısa rapor formatına dönüştür.",
-                """
-                Final rapor her agent'ın ne yaptığını, test kapsamını, riskleri ve iyileştirme önerilerini kısa özetlemeli.
-                Emailde Product, Test Automation, Performance, SecOps ve DevOps etkisi ayrı okunabilmeli.
-                Başarısız testler için LLM iyileştirme adayları açıkça belirtilmeli.
-                """);
+                "Tüm agent çıktılarını email/Allure özetine girecek kısa rapor formatına dönüştür.");
     }
 }

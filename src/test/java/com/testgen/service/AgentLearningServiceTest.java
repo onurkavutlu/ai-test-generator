@@ -32,12 +32,12 @@ public class AgentLearningServiceTest {
     private final TestGenerationRequest request = TestGenerationRequest.builder()
             .testType(TestType.BACKEND_API)
             .framework(TestFramework.KARATE)
-            .swaggerUrl("https://petstore3.swagger.io/api/v3/openapi.json")
+            .swaggerUrl("https://fakerestapi.azurewebsites.net/swagger/v1/swagger.json")
             .build();
 
     @Test
     public void serviceKeyIsExtractedFromSwaggerUrl() {
-        assertEquals("petstore3.swagger.io", AgentLearningService.serviceKeyOf(request));
+        assertEquals("fakerestapi.azurewebsites.net", AgentLearningService.serviceKeyOf(request));
     }
 
     @Test
@@ -67,7 +67,7 @@ public class AgentLearningServiceTest {
         ArgumentCaptor<AgentLearning> captor = ArgumentCaptor.forClass(AgentLearning.class);
         verify(repository).save(captor.capture());
         AgentLearning saved = captor.getValue();
-        assertEquals("petstore3.swagger.io", saved.getServiceKey());
+        assertEquals("fakerestapi.azurewebsites.net", saved.getServiceKey());
         assertEquals(AgentLearning.Source.RUN_FAILURE, saved.getSource());
         assertTrue(saved.getLesson().contains("GetPetTest"));
         assertTrue(saved.getLesson().contains("404"));
@@ -97,9 +97,9 @@ public class AgentLearningServiceTest {
 
     @Test
     public void learningsAreInjectedIntoContext() {
-        when(repository.findTop10ByServiceKeyOrderByCreatedAtDesc("petstore3.swagger.io"))
+        when(repository.findTop10ByServiceKeyOrderByCreatedAtDesc("fakerestapi.azurewebsites.net"))
                 .thenReturn(List.of(AgentLearning.builder()
-                        .serviceKey("petstore3.swagger.io")
+                        .serviceKey("fakerestapi.azurewebsites.net")
                         .source(AgentLearning.Source.SELF_HEAL)
                         .lesson("Test 'GetPetTest' LLM düzeltmesi gerektirdi: /pet/{id} 404 dönüyor")
                         .build()));

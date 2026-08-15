@@ -18,11 +18,6 @@ public class DeveloperAgent extends AbstractLlmAgent {
     @Override
     public AiAgentResult analyze(AiAgentContext context) {
         return runAgent(context, "Developer Agent",
-                "Kod kontratı, entegrasyon noktaları, edge case ve assertion gereksinimlerini çıkar.",
-                """
-                API/UI kontratı status, response field, selector ve state transition seviyesinde doğrulanmalı.
-                Edge case'ler null/empty input, boundary değer, duplicate request ve not-found durumlarını kapsamalı.
-                Entegrasyon riski olan dış servisler mock veya test data ile deterministic hale getirilmeli.
-                """);
+                "Kod kontratı, entegrasyon noktaları, edge case ve assertion gereksinimlerini çıkar.");
     }
 }

@@ -8,6 +8,8 @@
 #    mailhog      → http://localhost:8025  (email önizleme)
 #    allure-server→ http://localhost:8888  (test raporları)
 #    selenium-hub → http://localhost:4444
+#    prometheus   → http://localhost:9090  (metrik & alarm)
+#    grafana      → http://localhost:3000  (dashboard, admin/admin)
 #    pgadmin      → http://localhost:5050  (opsiyonel)
 # ═══════════════════════════════════════════════════════════════
 
@@ -140,6 +142,54 @@ services:
       - testgen-net
     restart: unless-stopped
 
+  # ─── Prometheus — metrik toplama & alarm ─────────────────────
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: testgen-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      # Config degisince yeniden baslatmadan yukle:
+      #   curl -X POST http://localhost:9090/-/reload
+      - --web.enable-lifecycle
+    extra_hosts:
+      # Uygulama IDE'den kosuyorsa host hedefi bu isimle cozulur (Linux'ta da calisir).
+      - "host.docker.internal:host-gateway"
+    networks:
+      - testgen-net
+    restart: unless-stopped
+
+  # ─── Grafana — dashboard ─────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: testgen-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # Yerel gelistirme kimligi. URETIMDE MUTLAKA DEGISTIRIN.
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_DEFAULT_THEME: dark
+      # Anonim erisim BILEREK kapali: Grafana 11+ surumlerinde anonim kimlik
+      # dashboard API'sine yetmiyor ve paneller sessizce bos geliyor.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - testgen-net
+    restart: unless-stopped
+
   # ─── PgAdmin (opsiyonel, --profile tools ile aç) ────────────
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -158,6 +208,8 @@ volumes:
   postgres-data:
   test-output:
   allure-reports:
+  prometheus-data:
+  grafana-data:
 
 networks:
   testgen-net:

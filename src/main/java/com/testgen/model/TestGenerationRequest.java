@@ -43,6 +43,13 @@ public class TestGenerationRequest {
     @Column(columnDefinition = "VARCHAR(20)")
     private String payloadType;         // CURL, JSON, XML vs.
 
+    /**
+     * Üretilecek en fazla case sayısı. Swagger'dan üretimde case sayısı endpoint
+     * sayısına eşittir; sınır konmazsa geniş bir API tek istekte onlarca case ve
+     * saatlik LLM süresi demektir. null = sınırsız (eski davranış).
+     */
+    private Integer maxCases;
+
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private RequestStatus status = RequestStatus.PENDING;
@@ -63,9 +70,37 @@ public class TestGenerationRequest {
     @Builder.Default
     private int totalFailureCount = 0;
 
-    /** LLM bu request için yeni test üretsin mi? (failure analizi sonrası) */
+    /**
+     * Koşum sonrası başarısız testler için self-healing OTOMATİK tetiklensin mi?
+     *
+     * VARSAYILAN KAPALI. Ölçülen bir koşumda LLM zamanının ~%50'si otomatik
+     * self-healing'e gidiyordu: her başarısız case 2 LLM çağrısı demek ve 45
+     * başarısız case, yeni üretimleri 10 dakikadan uzun süre aç bıraktı.
+     * İyileştirme artık kullanıcı isteğiyle tetiklenir:
+     * {@code POST /api/v1/tests/{requestId}/self-heal}
+     *
+     * Zamanlanmış (scheduler) koşumlarda otomatik iyileştirme istenirse bu alan
+     * request bazında açılabilir.
+     */
     @Builder.Default
-    private boolean autoGenerateOnFailure = true;
+    private boolean autoGenerateOnFailure = false;
+
+    /**
+     * Çok-ajanlı analiz adımı bu istek için koşulsun mu?
+     *
+     * Dahili alan — public üretim API'sinde yer almaz; varsayılan açıktır. Yalnızca
+     * ajan ölçüm koşumu (benchmark) kontrol kolunu kapatmak için false yapar.
+     */
+    @Builder.Default
+    private boolean agentsEnabled = true;
+
+    /**
+     * Bu istek için ajan katmanı genişliği. null ise konfigürasyondaki varsayılan geçerlidir.
+     * Dahili alan — yalnızca ölçüm koşumu LEAN/FULL kollarını ayırmak için doldurur.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private com.testgen.agent.AgentRouting.Mode agentMode;
 
     @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<GeneratedTestCase> generatedTestCases;

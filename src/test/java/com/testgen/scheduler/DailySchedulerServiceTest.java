@@ -77,7 +77,7 @@ public class DailySchedulerServiceTest {
                 .build();
 
         when(requestRepository.findAllScheduled()).thenReturn(List.of(request));
-        when(testCaseRepository.findByRequestId("req-123")).thenReturn(List.of(tc));
+        when(testCaseRepository.findByRequestIdAndSupersededFalse("req-123")).thenReturn(List.of(tc));
         
         // Mock the first case failure
         when(karateRunner.run(tc)).thenReturn(TestRunResult.ofMaven(false, "Failed to connect", 1, 0));
@@ -120,7 +120,7 @@ public class DailySchedulerServiceTest {
                 .build();
 
         when(requestRepository.findById("req-123")).thenReturn(Optional.of(request));
-        when(testCaseRepository.findByRequestId("req-123")).thenReturn(List.of(tc));
+        when(testCaseRepository.findByRequestIdAndSupersededFalse("req-123")).thenReturn(List.of(tc));
         when(karateRunner.run(tc)).thenReturn(TestRunResult.ofMaven(true, "Success", 1, 0));
 
         SchedulerRunSummary summary = dailySchedulerService.triggerManually("req-123");

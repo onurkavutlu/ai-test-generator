@@ -21,7 +21,47 @@ public class LlmReportStore {
     private static final int MAX_SIZE = 500;
 
     private final LlmCallLogRepository callLogRepository;
+    private final com.testgen.metrics.TestGenMetrics metrics;
     private final List<LlmCallReport> reports = new CopyOnWriteArrayList<>();
+
+    /**
+     * Açılışta geçmişi DB'den belleğe geri yükler.
+     *
+     * Bu olmadan kayıtlar llm_call_logs tablosuna yazılıyor ama HİÇBİR okuma yolu
+     * (all/byType/summary) tabloya bakmadığı için her yeniden başlatmada arayüz
+     * "çağrı geçmişi bulunamadı" gösteriyordu — veri duruyor, görünmüyordu.
+     *
+     * NOT: rawResponse tabloda tutulmaz (boyut nedeniyle); geri yüklenen kayıtlarda
+     * bu alan null kalır. Bellekteki taze kayıtlarda doludur.
+     */
+    @jakarta.annotation.PostConstruct
+    void restoreFromDatabase() {
+        try {
+            List<LlmCallLog> recent = callLogRepository.findRecent(
+                    org.springframework.data.domain.PageRequest.of(0, MAX_SIZE));
+            // Sorgu en yeniden eskiye döner; bellekte kronolojik sıra beklenir.
+            for (int i = recent.size() - 1; i >= 0; i--) {
+                reports.add(toReport(recent.get(i)));
+            }
+            log.info("LLM çağrı geçmişi DB'den yüklendi: {} kayıt", reports.size());
+        } catch (Exception e) {
+            log.warn("LLM çağrı geçmişi DB'den yüklenemedi: {}", e.getMessage());
+        }
+    }
+
+    private static LlmCallReport toReport(LlmCallLog entity) {
+        return new LlmCallReport(
+                entity.getModel(),
+                entity.getCallType(),
+                entity.getPromptSummary(),
+                entity.getPromptChars(),
+                entity.getResponseChars(),
+                entity.getDurationMs(),
+                entity.isSuccess(),
+                entity.getErrorMessage(),
+                null,
+                entity.getCalledAt());
+    }
 
     public void record(LlmCallReport report) {
         if (reports.size() >= MAX_SIZE) {
@@ -29,6 +69,8 @@ public class LlmReportStore {
         }
         reports.add(report);
         persist(report);
+        metrics.recordLlmCall(report.callType(), report.success(),
+                report.durationMs(), report.promptChars());
 
         // Konsola anında görünür özet
         if (report.success()) {

@@ -24,7 +24,17 @@ public class ObservationServiceTest {
     private static String baseUrl;
     private static final AtomicInteger mutationHits = new AtomicInteger();
 
-    private final ObservationService service = new ObservationService();
+    private final ObservationService service = new ObservationService(
+            new com.testgen.runner.ResponseAssertionDeriver(new com.fasterxml.jackson.databind.ObjectMapper()),
+            testGuard());
+
+    /** Testler localhost'a istek atıyor; guard'ın varsayılan (özel ağ serbest) hâli. */
+    private static com.testgen.config.OutboundUrlGuard testGuard() {
+        var g = new com.testgen.config.OutboundUrlGuard();
+        g.setAllowPrivateNetworks(true);
+        return g;
+    }
+
 
     @BeforeAll
     static void start() throws Exception {

@@ -38,16 +38,21 @@ public class OllamaLlmService implements LlmService {
             6. Markdown ```code``` bloğu içinde döndür
             """;
 
+    /** Bağlam penceresi — prompt bunu aşarsa Ollama sessizce kırpar (bkz. warnIfPromptExceedsContext). */
+    private final int numCtx;
+
     public OllamaLlmService(
             ChatLanguageModel chatModel,
             @Value("${llm.ollama.model}") String model,
+            @Value("${llm.ollama.num-ctx:16384}") int numCtx,
             LlmReportStore reportStore) {
 
         this.modelName   = model;
         this.reportStore = reportStore;
         this.chatModel   = chatModel;
+        this.numCtx      = numCtx;
 
-        log.info("Ollama LLM Service başlatıldı — model: {}", model);
+        log.info("Ollama LLM Service başlatıldı — model: {}, numCtx: {}", model, numCtx);
     }
 
     @Override
@@ -94,6 +99,7 @@ public class OllamaLlmService implements LlmService {
     // Merkezi LLM çağrı metodu — her çağrıyı raporlar
     // ─────────────────────────────────────────────────────────
     private String callLlm(String prompt, String callType) {
+        warnIfPromptExceedsContext(prompt, callType);
         long start = System.currentTimeMillis();
         try {
             var response = chatModel.generate(
@@ -111,6 +117,29 @@ public class OllamaLlmService implements LlmService {
             log.warn("Ollama çağrısı başarısız ({}ms): {}. Lütfen Ollama'yı başlatın ve gemma4:31b-cloud modelini yükleyin.", durationMs, e.getMessage());
             reportStore.record(LlmCallReport.failure(modelName, callType, prompt, e.getMessage(), durationMs));
             throw new RuntimeException("LLM bağlantı hatası: " + e.getMessage() + ". Lütfen Ollama'yı başlatın!");
+        }
+    }
+
+    /**
+     * Prompt bağlam penceresine sığmıyorsa uyarır.
+     *
+     * NEDEN: Ollama sığmayan prompt'u HATA VERMEDEN kırpar. Ölçülen bir koşumda
+     * gözlem katmanı prompt'u 34.000+ karaktere çıkardı, pencere 8192 token'dı ve
+     * "Return ONLY the .feature file content" talimatı kırpılan kısımda kaldı —
+     * model kod yerine açıklama metni döndürdü. Üretilen case'lerin çoğunda hiç
+     * Gherkin/Java olmamasının sebebi buydu ve hiçbir yerde iz bırakmıyordu.
+     */
+    private void warnIfPromptExceedsContext(String prompt, String callType) {
+        if (prompt == null) {
+            return;
+        }
+        // Türkçe metinde token başına ~3 karakter; İngilizce'de ~4. Temkinli taraf seçildi.
+        int estimatedTokens = prompt.length() / 3;
+        if (estimatedTokens > numCtx * 0.9) {
+            log.warn("⚠ Prompt bağlam penceresini zorluyor [{}]: ~{} token / numCtx {} "
+                            + "({} karakter). Ollama fazlasını SESSİZCE KIRPAR; talimatlar düşebilir. "
+                            + "llm.ollama.num-ctx değerini artırın ya da bağlamı küçültün.",
+                    callType, estimatedTokens, numCtx, prompt.length());
         }
     }
 }

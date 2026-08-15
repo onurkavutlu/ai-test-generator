@@ -12,8 +12,27 @@ public record ComparisonResultDto(
         LocalDateTime executedAt,
         long totalDurationMs,
         Summary summary,
-        List<RequestComparisonResult> results
+        List<RequestComparisonResult> results,
+        /**
+         * Yanıt gövdesi farklarının ajan değerlendirmesi (kırıcı / uyumlu / gürültü).
+         * Fark yoksa, ajan kapalıysa veya LLM erişilemezse null kalır — karşılaştırma
+         * sonucu bundan bağımsız olarak her zaman döner.
+         */
+        String diffAnalysis
 ) {
+    /** Ajan değerlendirmesi olmadan sonuç (geri uyumluluk). */
+    public ComparisonResultDto(String baseUrlA, String baseUrlB, LocalDateTime executedAt,
+                               long totalDurationMs, Summary summary,
+                               List<RequestComparisonResult> results) {
+        this(baseUrlA, baseUrlB, executedAt, totalDurationMs, summary, results, null);
+    }
+
+    /** Aynı sonucun ajan değerlendirmesi eklenmiş kopyası. */
+    public ComparisonResultDto withDiffAnalysis(String analysis) {
+        return new ComparisonResultDto(baseUrlA, baseUrlB, executedAt, totalDurationMs,
+                summary, results, analysis);
+    }
+
     public record Summary(
             int totalRequests,
             int identicalCount,

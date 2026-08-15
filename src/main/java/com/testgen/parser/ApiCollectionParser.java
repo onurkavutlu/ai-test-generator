@@ -40,9 +40,12 @@ public class ApiCollectionParser {
             String method = requestNode.has("method") ? requestNode.get("method").asText() : "GET";
             String url = extractUrl(requestNode);
             
-            String details = requestNode.toPrettyString();
+            // Ham JSON yerine kompakt özet: Postman meta verisi prompt'a taşınmaz
+            String details = RequestDetailFormatter.fromPostman(requestNode, method, url);
             
-            results.add(new ParsedRequestDto(name, method, url, details));
+            results.add(new ParsedRequestDto(name, method, url, details,
+                    RequestDetailFormatter.postmanHeaders(requestNode),
+                    RequestDetailFormatter.postmanBody(requestNode)));
         }
     }
 

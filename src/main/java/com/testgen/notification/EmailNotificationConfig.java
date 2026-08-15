@@ -16,5 +16,6 @@ public class EmailNotificationConfig {
     private String defaultRecipients;
     private String subjectPrefix;
     private String allureReportUrl;
-    private boolean attachReport = false;
+    private String appBaseUrl = "http://localhost:8080";
+    private boolean attachReport = true;
 }

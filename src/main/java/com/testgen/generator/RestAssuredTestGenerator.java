@@ -30,6 +30,7 @@ public class RestAssuredTestGenerator {
 
     private final LlmService llmService;
     private final GeneratedJavaTestProjectService javaTestProjectService;
+    private final GenerationLimit generationLimit;
 
     public List<GeneratedTestCase> generate(TestGenerationRequest request) {
         List<GeneratedTestCase> results = new ArrayList<>();
@@ -38,6 +39,14 @@ public class RestAssuredTestGenerator {
             results.addAll(generateFromSwagger(request));
         } else {
             results.add(generateFromUserStory(request));
+            // generate-from-response akışı Swagger vermez; gözlem bağlamı "## OBSERVED FACTS"
+            // biçimindedir. Bu dal deterministik case üretmediği için REST Assured tarafında
+            // hiç geçen test kalmıyordu (canlı doğrulamada yakalandı).
+            ObservedApiTestBuilder.buildRestAssuredCase(request.getAdditionalContext())
+                    .ifPresent(tc -> {
+                        saveToFile(tc.getFileName(), tc.getTestContent());
+                        results.add(tc);
+                    });
         }
 
         return results;
@@ -55,11 +64,21 @@ public class RestAssuredTestGenerator {
                 return cases;
             }
 
+            // Karate ile aynı kural: maxCases verildiyse o sayıda endpoint'te dur
+            int limit = generationLimit.resolve(request, openAPI.getPaths().size());
+            outer:
             for (Map.Entry<String, PathItem> entry : openAPI.getPaths().entrySet()) {
                 String path = entry.getKey();
                 PathItem pathItem = entry.getValue();
 
-                pathItem.readOperationsMap().forEach((httpMethod, operation) -> {
+                for (Map.Entry<PathItem.HttpMethod, io.swagger.v3.oas.models.Operation> op
+                        : pathItem.readOperationsMap().entrySet()) {
+                    if (cases.size() >= limit) {
+                        log.info("maxCases sınırına ulaşıldı ({}), kalan endpoint'ler atlanıyor", limit);
+                        break outer;
+                    }
+                    var httpMethod = op.getKey();
+                    var operation = op.getValue();
                     String swaggerSnippet = extractOperationYaml(path, httpMethod.toString(), operation);
                     String context = request.getAdditionalContext() != null ? request.getAdditionalContext() : "";
 
@@ -68,7 +87,7 @@ public class RestAssuredTestGenerator {
 
                     String className = buildClassName(path, httpMethod.toString());
                     // package/JUnit5/sınıf-adı garantisi — LLM prompt'a uymazsa derleme kırılmasın
-                    String cleanContent = CodeCleaner.normalizeGeneratedJavaTest(
+                    String cleanContent = CodeCleaner.normalizeRestAssuredTest(
                             CodeCleaner.cleanJavaContent(generatedContent), className);
 
                     GeneratedTestCase tc = GeneratedTestCase.builder()
@@ -81,12 +100,21 @@ public class RestAssuredTestGenerator {
 
                     saveToFile(tc.getFileName(), cleanContent);
                     cases.add(tc);
-                });
+                }
             }
         } catch (Exception e) {
             log.error("Swagger'dan Rest-Assured test üretimi başarısız", e);
             cases.add(generateFromUserStory(request));
         }
+
+        // Karate ile aynı deterministik güvenlik ağı: canlı problanmış endpoint'lerden
+        // hiç tahmin içermeyen kontrat testi. Bkz. ObservedApiTestBuilder.
+        ObservedApiTestBuilder.buildRestAssuredCase(request.getAdditionalContext())
+                .ifPresent(tc -> {
+                    saveToFile(tc.getFileName(), tc.getTestContent());
+                    cases.add(tc);
+                });
+
         return cases;
     }
 
@@ -97,12 +125,12 @@ public class RestAssuredTestGenerator {
                 request.getAdditionalContext() != null ? request.getAdditionalContext() : "");
 
         String content = llmService.generateTestCase(prompt, "REST_ASSURED");
-        String cleanContent = CodeCleaner.normalizeGeneratedJavaTest(
+        String cleanContent = CodeCleaner.normalizeRestAssuredTest(
                 CodeCleaner.cleanJavaContent(content), null);
         // Dosya adını LLM'in verdiği class adından türet; anlamlı ad yoksa fallback'e zorla
         String extracted = CodeCleaner.publicClassName(cleanContent);
         String className = extracted.startsWith("GeneratedTest_") ? "GeneratedApiTest" : extracted;
-        cleanContent = CodeCleaner.normalizeGeneratedJavaTest(cleanContent, className);
+        cleanContent = CodeCleaner.normalizeRestAssuredTest(cleanContent, className);
 
         GeneratedTestCase tc = GeneratedTestCase.builder()
                 .testName(className)
@@ -117,16 +145,15 @@ public class RestAssuredTestGenerator {
     }
 
     private String buildClassName(String path, String method) {
-        return method.substring(0, 1).toUpperCase() + method.substring(1).toLowerCase()
-                + path.replaceAll("[/{}]", "_").replaceAll("_+", "_")
-                .replaceAll("^_|_$", "")
-                + "Test";
+        return CodeCleaner.buildTestName(path, method);
     }
 
     private String extractOperationYaml(String path, String method, io.swagger.v3.oas.models.Operation op) {
         StringBuilder sb = new StringBuilder();
-        sb.append("paths:\n  ").append(path).append(":\n    ").append(method.toLowerCase()).append(":\n");
+        sb.append("paths:\n  ").append(path).append(":\n    ")
+                .append(method.toLowerCase(java.util.Locale.ROOT)).append(":\n");
         if (op.getSummary() != null) sb.append("      summary: ").append(op.getSummary()).append("\n");
+        sb.append(SwaggerSnippets.declaredResponses(op));
         return sb.toString();
     }
 

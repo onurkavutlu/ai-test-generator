@@ -33,10 +33,15 @@ management:
 test-generator:
   seeding:
     enabled: true
+  selenium:
+    # Lokal geliştirmede testler GÖRÜNÜR tarayıcıda koşar (Docker/CI profilinde headless kalır).
+    # Kapatmak için: SELENIUM_HEADLESS=true
+    headless: ${SELENIUM_HEADLESS:false}
   output:
     base-path: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}
     karate-path: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/karate
     selenium-path: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/selenium
+    restassured-path: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/restassured
     allure-results: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/allure-results
     allure-report: ${TEST_OUTPUT_PATH:${java.io.tmpdir}/generated-tests}/allure-report
 

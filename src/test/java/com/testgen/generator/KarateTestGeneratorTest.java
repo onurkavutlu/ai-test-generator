@@ -23,11 +23,19 @@ public class KarateTestGeneratorTest {
         assertTrue(feature.contains("@testCaseLLM"));
     }
 
+    /**
+     * ESKİ DAVRANIŞ KALDIRILDI. Bu test önceden şunu doğruluyordu: bağlam yokken
+     * varsayılanlara düşülüp {@code Then status 200} içeren bir feature üretilmesi.
+     * Yani aracın HİÇ GÖZLEMLEMEDİĞİ bir durum kodunu doğrulayan, garanti geçen bir
+     * test üretmesi "doğru davranış" olarak kilitlenmişti.
+     *
+     * <p>Kurumsal kural artık nettir: gözlenmeyen değer uydurulmaz. Bağlam eksikse
+     * case üretilmez. Kapsamlı senaryolar için bkz. {@code NoFabricatedContentTest}.
+     */
     @Test
-    public void deterministicCapturedFeatureFallsBackToDefaultsOnMissingContext() {
-        String feature = KarateTestGenerator.buildDeterministicCapturedFeature(null);
-        assertTrue(feature.contains("Feature:"));
-        assertTrue(feature.contains("Then status 200"));
+    public void deterministicCapturedFeatureRefusesToInventDefaults() {
+        assertThrows(IllegalArgumentException.class,
+                () -> KarateTestGenerator.buildDeterministicCapturedFeature(null));
     }
 
     @Test

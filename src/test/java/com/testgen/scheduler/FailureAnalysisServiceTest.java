@@ -27,6 +27,9 @@ public class FailureAnalysisServiceTest {
     @Mock
     private com.testgen.service.AgentLearningService agentLearningService;
 
+    @Mock
+    private com.testgen.generator.TestContentGate testContentGate;
+
     @InjectMocks
     private FailureAnalysisService failureAnalysisService;
 
@@ -104,5 +107,30 @@ public class FailureAnalysisServiceTest {
 
         assertTrue(result.isEmpty());
         verifyNoInteractions(llmService);
+    }
+
+    @Test
+    public void healedCaseGoesThroughTheValidationGate() {
+        // CANLIDA OLCULDU: self-healing ciktisi hic dogrulanmadan kaydediliyordu.
+        // Karate case'i icin LLM Java kodu + aciklama metni dondurmustu ve kosumda
+        // "missing FEATURE at <EOF>" ile patlamisti. Kapi bu yolda da calismali.
+        org.springframework.test.util.ReflectionTestUtils.setField(failureAnalysisService, "maxHealAttempts", 3);
+
+        TestGenerationRequest request = TestGenerationRequest.builder()
+                .id("req-1").testType(TestType.BACKEND_API).build();
+
+        GeneratedTestCase failedCase = GeneratedTestCase.builder()
+                .testName("HealthTest").fileName("HealthTest.feature")
+                .testContent("Feature: health")
+                .runStatus(TestRunStatus.FAILED).runOutput("bosluk")
+                .framework(TestFramework.KARATE).request(request).build();
+
+        when(llmService.generateTestCase(anyString(), anyString()))
+                .thenReturn("Feature: duzeltilmis\n  Scenario: s\n    Then status 200");
+
+        List<GeneratedTestCase> healed = failureAnalysisService.analyzeAndGenerateNew(List.of(failedCase), request);
+
+        assertEquals(1, healed.size());
+        verify(testContentGate, times(1)).apply(healed.get(0));
     }
 }

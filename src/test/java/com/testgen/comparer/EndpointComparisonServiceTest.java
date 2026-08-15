@@ -28,9 +28,21 @@ public class EndpointComparisonServiceTest {
     private static String baseUrlB;
 
     private final ObjectMapper mapper = new ObjectMapper();
+    // Yanıt farkı ajanı mock'lanır: karşılaştırmanın deterministik diff'i ajandan bağımsız
+    // olmalı — ajan yorum üretmese de sonuçlar aynı kalmalı.
+    private final ResponseDiffAgent diffAgent = org.mockito.Mockito.mock(ResponseDiffAgent.class);
     private final EndpointComparisonService service =
             new EndpointComparisonService(mapper, new ApiCollectionParser(mapper),
-                    org.mockito.Mockito.mock(com.testgen.repository.ComparisonRunRepository.class));
+                    org.mockito.Mockito.mock(com.testgen.repository.ComparisonRunRepository.class),
+                    diffAgent, testGuard());
+
+    /** Testler localhost'a istek atıyor; guard'ın varsayılan (özel ağ serbest) hâli. */
+    private static com.testgen.config.OutboundUrlGuard testGuard() {
+        var g = new com.testgen.config.OutboundUrlGuard();
+        g.setAllowPrivateNetworks(true);
+        return g;
+    }
+
 
     @BeforeAll
     static void startServers() throws Exception {
@@ -141,23 +153,23 @@ public class EndpointComparisonServiceTest {
     public void parsesPostmanCollectionIntoRequests() {
         String collection = """
                 {
-                  "info": {"name": "Pets", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+                  "info": {"name": "Kitaplik", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
                   "item": [
                     {
-                      "name": "Get Pet",
+                      "name": "Kitap detay",
                       "request": {
                         "method": "GET",
                         "header": [{"key": "Accept", "value": "application/json"}],
-                        "url": {"raw": "https://petstore.example.com/api/pets?limit=5"}
+                        "url": {"raw": "https://kitaplik.example.com/api/books?limit=5"}
                       }
                     },
                     {
-                      "name": "Create Pet",
+                      "name": "Kitap ekle",
                       "request": {
                         "method": "POST",
                         "header": [],
-                        "body": {"mode": "raw", "raw": "{\\"name\\":\\"Boncuk\\"}"},
-                        "url": {"raw": "https://petstore.example.com/api/pets"}
+                        "body": {"mode": "raw", "raw": "{\\"title\\":\\"Kayip Zaman\\"}"},
+                        "url": {"raw": "https://kitaplik.example.com/api/books"}
                       }
                     }
                   ]
@@ -168,10 +180,10 @@ public class EndpointComparisonServiceTest {
 
         assertEquals(2, requests.size());
         assertEquals("GET", requests.get(0).method());
-        assertEquals("/api/pets?limit=5", requests.get(0).path());
+        assertEquals("/api/books?limit=5", requests.get(0).path());
         assertEquals("application/json", requests.get(0).headers().get("Accept"));
         assertEquals("POST", requests.get(1).method());
-        assertEquals("{\"name\":\"Boncuk\"}", requests.get(1).body());
+        assertEquals("{\"title\":\"Kayip Zaman\"}", requests.get(1).body());
     }
 
     @Test

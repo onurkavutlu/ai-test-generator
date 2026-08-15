@@ -49,11 +49,12 @@ public class TestGenerationControllerTest {
                 TestType.BACKEND_API,
                 TestFramework.KARATE,
                 "User story for API test",
-                "https://petstore3.swagger.io/api/v3/openapi.json",
+                "https://fakerestapi.azurewebsites.net/swagger/v1/swagger.json",
                 null, // applicationUrl
                 "API context",
                 null, // rawPayload
-                null  // payloadType
+                null, // payloadType
+                null  // maxCases
         );
 
         TestGenerationRequest request = TestGenerationRequest.builder()
@@ -87,11 +88,12 @@ public class TestGenerationControllerTest {
                 TestType.BACKEND_API,
                 TestFramework.KARATE,
                 "User story for API test",
-                "https://petstore3.swagger.io/api/v3/openapi.json",
+                "https://fakerestapi.azurewebsites.net/swagger/v1/swagger.json",
                 null, // applicationUrl
                 "API context",
                 null, // rawPayload
-                null  // payloadType
+                null, // payloadType
+                null  // maxCases
         );
 
         TestGenerationRequest request = TestGenerationRequest.builder()
@@ -127,7 +129,8 @@ public class TestGenerationControllerTest {
                 null, // applicationUrl
                 null, // additionalContext
                 null, // rawPayload
-                null  // payloadType
+                null, // payloadType
+                null  // maxCases
         );
 
         mockMvc.perform(post("/api/v1/tests/generate")

@@ -1,5 +1,6 @@
 package com.testgen.runner;
 
+import com.testgen.model.ExecutionTrigger;
 import com.testgen.model.GeneratedTestCase;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestGenerationRequest;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.io.*;
 import java.nio.file.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -45,6 +47,9 @@ public class TestRunnerService {
     private final FailureAnalysisService          failureAnalysisService;
     private final com.testgen.service.AgentLearningService agentLearningService;
     private final com.testgen.service.TestSuiteService testSuiteService;
+    private final com.testgen.service.TestExecutionService testExecutionService;
+    private final com.testgen.service.TestPlanService testPlanService;
+    private final com.testgen.metrics.TestGenMetrics metrics;
 
     @Value("${test-generator.runner.timeout-seconds}")
     private int timeoutSeconds;
@@ -61,34 +66,97 @@ public class TestRunnerService {
     @Async
     public CompletableFuture<Void> runSuite(String suiteId) {
         var suite = testSuiteService.get(suiteId);
-        List<GeneratedTestCase> cases = suite.getTestCases();
-        log.info("Suite koşumu başlıyor: '{}' — {} case", suite.getName(), cases.size());
+        // Supersede edilmiş (self-healing ile yenisi üretilmiş) case'ler koşulmaz —
+        // aksi halde eski bozuk versiyon yeni versiyonla aynı dosyaya yazıp sonucu bozar.
+        List<GeneratedTestCase> cases = suite.getTestCases().stream()
+                .filter(tc -> !tc.isSuperseded())
+                .toList();
 
-        // Suite'teki Java framework'lerinin proje dizinlerini temizle (bayat dosya koşulmasın)
+        var execution = testExecutionService.open(
+                "Suite koşumu — " + suite.getName(), ExecutionTrigger.SUITE,
+                null, null, suite.getId(), suite.getName(), null, cases.size());
+
+        executeAndRecord(execution.getId(), cases, "suite");
+        return CompletableFuture.completedFuture(null);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Test Plan koşumu: plandaki tüm suite'lerin case'leri
+    // ─────────────────────────────────────────────────────────
+    @Async
+    public CompletableFuture<Void> runPlan(String planId) {
+        var plan = testPlanService.get(planId);
+        List<GeneratedTestCase> cases = testPlanService.resolveCases(planId);
+
+        var execution = testExecutionService.open(
+                "Plan koşumu — " + plan.getName(), ExecutionTrigger.PLAN,
+                plan.getId(), plan.getName(), null, null, null, cases.size());
+
+        executeAndRecord(execution.getId(), cases, "plan");
+        return CompletableFuture.completedFuture(null);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Geçmiş bir koşumun aynı kapsamla tekrarı
+    // ─────────────────────────────────────────────────────────
+    @Async
+    public CompletableFuture<Void> rerunExecution(String sourceExecutionId) {
+        var source = testExecutionService.get(sourceExecutionId);
+        List<GeneratedTestCase> cases = testExecutionService.resolveCasesForRerun(sourceExecutionId);
+
+        var execution = testExecutionService.open(
+                "Yeniden koşum — " + source.getName(), ExecutionTrigger.RERUN,
+                source.getPlanId(), source.getPlanName(),
+                source.getSuiteId(), source.getSuiteName(),
+                sourceExecutionId, cases.size());
+
+        executeAndRecord(execution.getId(), cases, "rerun");
+        return CompletableFuture.completedFuture(null);
+    }
+
+    /**
+     * Koşum kaydını yürüten ortak akış: case'leri koşar, her sonucu koşum kaydına
+     * anlık görüntü olarak yazar, özetleri günceller ve raporu üretip gönderir.
+     */
+    private void executeAndRecord(String executionId, List<GeneratedTestCase> cases, String label) {
+        log.info("[{}] koşum başlıyor — {} case (executionId: {})", label, cases.size(), executionId);
+        testExecutionService.markRunning(executionId);
+
+        if (cases.isEmpty()) {
+            testExecutionService.abort(executionId, "Kapsamda koşulabilir test case yok.");
+            return;
+        }
+
+        // Java framework'lerinin proje dizinlerini temizle (bayat dosya koşulmasın)
         cases.stream().map(GeneratedTestCase::getFramework).distinct()
                 .forEach(javaTestProjectService::cleanTestFiles);
 
-        List<CompletableFuture<Void>> futures = cases.stream().map(tc ->
-                CompletableFuture.runAsync(() -> {
-                    tc.setRunStatus(TestRunStatus.RUNNING);
-                    testCaseRepository.save(tc);
-                    TestRunResult result = runSingle(tc);
-                    applyResult(tc, result);
-                    testCaseRepository.save(tc);
-                    log.info("  [suite] {} — {}", tc.getTestName(), tc.getRunStatus());
-                })
-        ).toList();
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        runCases(cases, label);
 
-        int passed = 0, failed = 0;
+        List<GeneratedTestCase> executed = new ArrayList<>();
         for (GeneratedTestCase tc : cases) {
-            var fresh = testCaseRepository.findById(tc.getId()).orElse(tc);
-            if (fresh.getRunStatus() == TestRunStatus.PASSED) passed++;
-            else if (fresh.getRunStatus() == TestRunStatus.FAILED) failed++;
+            GeneratedTestCase fresh = testCaseRepository.findById(tc.getId()).orElse(tc);
+            executed.add(fresh);
+            testExecutionService.recordResult(executionId, fresh);
         }
-        testSuiteService.recordRunSummary(suiteId, passed, failed);
-        log.info("Suite koşumu bitti: '{}' — {} PASSED / {} FAILED", suite.getName(), passed, failed);
-        return CompletableFuture.completedFuture(null);
+
+        var closed = testExecutionService.close(executionId);
+
+        if (closed.getSuiteId() != null) {
+            testSuiteService.recordRunSummary(closed.getSuiteId(),
+                    closed.getPassedCases(), closed.getFailedCases());
+        }
+        if (closed.getPlanId() != null) {
+            testPlanService.recordExecutionSummary(closed.getPlanId(), closed.getStatus(),
+                    closed.getPassedCases(), closed.getFailedCases());
+        }
+
+        // Koşum bazlı rapor + e-posta (case'ler farklı üretim isteklerinden gelebilir)
+        try {
+            reportOrchestrator.generateAndSend(executionId, null, executed, null);
+        } catch (Exception e) {
+            log.error("Koşum raporu üretilemedi - executionId: {}", executionId, e);
+        }
     }
 
     // ─────────────────────────────────────────────────────────
@@ -110,9 +178,18 @@ public class TestRunnerService {
         log.info("Test tamamlandı: {} — {} ({}/{})",
                 tc.getTestName(), tc.getRunStatus(), tc.getPassedScenarios(), tc.getTotalScenarios());
 
-        TestGenerationRequest request = tc.getRequest();
-        if (request != null) {
-            reportOrchestrator.generateAndSend(request, testCaseRepository.findByRequestId(request.getId()));
+        // tc.getRequest() LAZY proxy döner; open-in-view kapalı olduğu için alanlarına
+        // erişim LazyInitializationException fırlatır ve rapor/e-posta adımı SESSİZCE
+        // ölürdü (@Async future içinde yutuluyordu). Satırı yeniden okuyup raporluyoruz.
+        String requestId = tc.getRequest() != null ? tc.getRequest().getId() : null;
+        if (requestId != null) {
+            try {
+                requestRepository.findById(requestId).ifPresent(request ->
+                        reportOrchestrator.generateAndSend(request,
+                                testCaseRepository.findByRequestIdAndSupersededFalse(requestId)));
+            } catch (Exception e) {
+                log.error("Rapor/e-posta adımı başarısız - requestId: {}", requestId, e);
+            }
         }
         return CompletableFuture.completedFuture(tc);
     }
@@ -125,73 +202,126 @@ public class TestRunnerService {
         var request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Request bulunamadı: " + requestId));
 
-        List<GeneratedTestCase> cases = testCaseRepository.findByRequestId(requestId);
-        log.info("{} test case paralel koşturuluyor — requestId: {}", cases.size(), requestId);
+        List<GeneratedTestCase> cases = testCaseRepository.findByRequestIdAndSupersededFalse(requestId);
+        log.info("{} test case koşturuluyor — requestId: {} (supersede edilenler hariç)",
+                cases.size(), requestId);
 
         // Eski test dosyalarını temizle (mvn compilation hatalarını önlemek için)
         javaTestProjectService.cleanTestFiles(request.getFramework());
 
-        // Her case için async iş başlat, hepsini bekle
-        List<CompletableFuture<Void>> futures = cases.stream().map(tc ->
-                CompletableFuture.runAsync(() -> {
-                    tc.setRunStatus(TestRunStatus.RUNNING);
-                    testCaseRepository.save(tc);
+        runCases(cases, "run-all");
 
-                    TestRunResult result = runSingle(tc);
-                    applyResult(tc, result);
-                    testCaseRepository.save(tc);
-                    log.info("  ✓ {} — {} ({}/{})",
-                            tc.getTestName(), tc.getRunStatus(),
-                            tc.getPassedScenarios(), tc.getTotalScenarios());
-                })
-        ).toList();
+        List<GeneratedTestCase> updated = testCaseRepository.findByRequestIdAndSupersededFalse(requestId);
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-        List<GeneratedTestCase> updated = testCaseRepository.findByRequestId(requestId);
-
+        // Self-healing OTOMATİK tetiklenmez (bkz. TestGenerationRequest.autoGenerateOnFailure).
+        // Kullanıcı hatayı gördükten sonra POST /api/v1/tests/{id}/self-heal ile başlatır.
         if (request.isAutoGenerateOnFailure()) {
-            List<GeneratedTestCase> failedCases = updated.stream()
-                    .filter(tc -> tc.getRunStatus() == TestRunStatus.FAILED)
-                    .toList();
-
-            if (!failedCases.isEmpty()) {
-                log.info("Manuel koşum sonrası {} başarısız test bulundu. Self-healing tetikleniyor...", failedCases.size());
-                List<GeneratedTestCase> newCases = failureAnalysisService.analyzeAndGenerateNew(failedCases, request);
-
-                if (!newCases.isEmpty()) {
-                    newCases.forEach(tc -> tc.setRequest(request));
-                    testCaseRepository.saveAll(newCases);
-                    log.info("{} yeni self-heal test üretildi. Koşuluyor...", newCases.size());
-
-                    // Suite üyeliği: eski FAILED case yerine heal edilen versiyon geçsin
-                    newCases.forEach(tc -> testSuiteService.replaceCaseInSuites(tc.getParentCaseId(), tc));
-
-                    // Eski test dosyalarını temizle (iyileştirilmiş versiyonlar koşulmadan önce)
-                    javaTestProjectService.cleanTestFiles(request.getFramework());
-
-                    List<CompletableFuture<Void>> healFutures = newCases.stream().map(tc ->
-                            CompletableFuture.runAsync(() -> {
-                                tc.setRunStatus(TestRunStatus.RUNNING);
-                                testCaseRepository.save(tc);
-
-                                TestRunResult result = runSingle(tc);
-                                applyResult(tc, result);
-                                testCaseRepository.save(tc);
-                                log.info("  🔧 SELF-HEAL {} — {} ({}/{})",
-                                        tc.getTestName(), tc.getRunStatus(),
-                                        tc.getPassedScenarios(), tc.getTotalScenarios());
-                            })
-                    ).toList();
-
-                    CompletableFuture.allOf(healFutures.toArray(new CompletableFuture[0])).join();
-                    updated = testCaseRepository.findByRequestId(requestId);
+            long failedCount = updated.stream()
+                    .filter(tc -> tc.getRunStatus() == TestRunStatus.FAILED).count();
+            if (failedCount > 0) {
+                log.info("Otomatik self-healing bu request için açık — {} başarısız test iyileştirilecek.", failedCount);
+                if (healFailedCases(request) > 0) {
+                    updated = testCaseRepository.findByRequestIdAndSupersededFalse(requestId);
                 }
+            }
+        } else {
+            long failedCount = updated.stream()
+                    .filter(tc -> tc.getRunStatus() == TestRunStatus.FAILED).count();
+            if (failedCount > 0) {
+                log.info("{} test başarısız. Self-healing otomatik ÇALIŞMAZ — başlatmak için: "
+                        + "POST /api/v1/tests/{}/self-heal", failedCount, requestId);
             }
         }
 
         reportOrchestrator.generateAndSend(request, updated, emailRecipients);
         return CompletableFuture.completedFuture(null);
+    }
+
+    /**
+     * Kullanıcı isteğiyle self-healing: başarısız case'leri analiz edip iyileştirilmiş
+     * sürümlerini üretir ve koşar. {@code autoGenerateOnFailure} bayrağına BAKMAZ —
+     * bu çağrının kendisi zaten kullanıcının açık talebidir.
+     *
+     * @return üretilip koşulan iyileştirilmiş case sayısı
+     */
+    @Async
+    public CompletableFuture<Integer> selfHealForRequest(String requestId) {
+        TestGenerationRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Request bulunamadı: " + requestId));
+        int healed = healFailedCases(request);
+        if (healed > 0) {
+            List<GeneratedTestCase> updated = testCaseRepository.findByRequestIdAndSupersededFalse(requestId);
+            reportOrchestrator.generateAndSend(request, updated, null);
+        }
+        return CompletableFuture.completedFuture(healed);
+    }
+
+    /** Ortak iyileştirme adımı — hem otomatik hem elle tetiklenen yol bunu kullanır. */
+    private int healFailedCases(TestGenerationRequest request) {
+        List<GeneratedTestCase> failedCases = testCaseRepository
+                .findByRequestIdAndSupersededFalse(request.getId()).stream()
+                .filter(tc -> tc.getRunStatus() == TestRunStatus.FAILED)
+                .toList();
+
+        if (failedCases.isEmpty()) {
+            log.info("İyileştirilecek başarısız test yok — requestId: {}", request.getId());
+            return 0;
+        }
+
+        List<GeneratedTestCase> newCases = failureAnalysisService.analyzeAndGenerateNew(failedCases, request);
+        if (newCases.isEmpty()) {
+            return 0;
+        }
+
+        newCases.forEach(tc -> tc.setRequest(request));
+        testCaseRepository.saveAll(newCases);
+        log.info("{} yeni self-heal test üretildi. Koşuluyor...", newCases.size());
+
+        // Suite üyeliği: eski FAILED case yerine heal edilen versiyon geçsin
+        newCases.forEach(tc -> testSuiteService.replaceCaseInSuites(tc.getParentCaseId(), tc));
+
+        // Eski test dosyalarını temizle (iyileştirilmiş versiyonlar koşulmadan önce)
+        javaTestProjectService.cleanTestFiles(request.getFramework());
+
+        runCases(newCases, "SELF-HEAL");
+        return newCases.size();
+    }
+
+    /**
+     * Case listesini framework'e göre koşturur.
+     *
+     * Karate in-process çalıştığı için paralel koşulur. SELENIUM/REST_ASSURED ise
+     * framework başına TEK bir Maven projesi paylaşır (aynı src/test/java ve target
+     * dizini); paralel `mvn test` çağrıları birbirinin sınıflarını ve target'ını
+     * ezdiği için bu case'ler sırayla koşulur.
+     */
+    private void runCases(List<GeneratedTestCase> cases, String label) {
+        List<GeneratedTestCase> parallelCases = cases.stream()
+                .filter(tc -> tc.getFramework() == TestFramework.KARATE)
+                .toList();
+        List<GeneratedTestCase> sequentialCases = cases.stream()
+                .filter(tc -> tc.getFramework() != TestFramework.KARATE)
+                .toList();
+
+        List<CompletableFuture<Void>> futures = parallelCases.stream()
+                .map(tc -> CompletableFuture.runAsync(() -> runAndRecord(tc, label)))
+                .toList();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        for (GeneratedTestCase tc : sequentialCases) {
+            runAndRecord(tc, label);
+        }
+    }
+
+    private void runAndRecord(GeneratedTestCase tc, String label) {
+        tc.setRunStatus(TestRunStatus.RUNNING);
+        testCaseRepository.save(tc);
+
+        TestRunResult result = runSingle(tc);
+        applyResult(tc, result);
+        testCaseRepository.save(tc);
+        log.info("  [{}] {} — {} ({}/{})", label, tc.getTestName(), tc.getRunStatus(),
+                tc.getPassedScenarios(), tc.getTotalScenarios());
     }
 
     // ─────────────────────────────────────────────────────────
@@ -218,6 +348,11 @@ public class TestRunnerService {
         tc.setFailedScenarios(result.failedCount());
         tc.setExecutionTimeMs(result.durationMs());
         tc.setLastRunAt(LocalDateTime.now());
+        // Kategori ve kaynak etiketiyle: hangi test sınıfının, hangi üretim yolundan
+        // geldiğinde geçtiği ancak böyle ayrıştırılabiliyor.
+        metrics.recordTestRun(tc.getFramework(), tc.getRunStatus(), result.durationMs(),
+                result.passedCount(), result.failedCount(),
+                tc.getTestCategory(), tc.isDeterministic());
 
         // Başarısızlıklar servis bazlı öğrenim deposuna düşer (halüsinasyon azaltma)
         if (!result.passed() && tc.getRequest() != null) {
@@ -230,11 +365,17 @@ public class TestRunnerService {
     // ─────────────────────────────────────────────────────────
     private TestRunResult runMavenTest(GeneratedTestCase tc) {
         long start = System.currentTimeMillis();
+        Path projectDir = null;
         try {
-            Path projectDir = javaTestProjectService.ensureProject(tc.getFramework());
+            // Ortak projeye de yaz (gözden geçirilebilir "son üretim" kopyası)
             javaTestProjectService.writeTestSource(tc.getFramework(), tc.getFileName(), tc.getTestContent());
+            // Koşum İZOLE projede yapılır: LLM'in ürettiği başka bir bozuk sınıf
+            // bu case'in derlenmesini engellemesin.
+            String runKey = tc.getId() != null ? tc.getId() : tc.getTestName();
+            projectDir = javaTestProjectService.prepareIsolatedRun(
+                    tc.getFramework(), runKey, tc.getFileName(), tc.getTestContent());
 
-            String mvnCmd = resolveMaven(projectDir);
+            String mvnCmd = javaTestProjectService.resolveMavenCommand(projectDir);
             ProcessBuilder pb = new ProcessBuilder(
                     mvnCmd, "-B", "-ntp", "test",
                     "-Dtest=" + tc.getTestName(),
@@ -267,39 +408,13 @@ public class TestRunnerService {
             }
 
             boolean success = process.exitValue() == 0;
-            String outStr = output.toString();
-            int total = parseTestCount(outStr);
-            return TestRunResult.ofMaven(success, outStr, total, durationMs);
+            return TestRunResult.fromSurefireOutput(success, output.toString(), durationMs);
 
         } catch (Exception e) {
             long durationMs = System.currentTimeMillis() - start;
             return TestRunResult.ofMaven(false, "Maven çalıştırılamadı: " + e.getMessage(), 0, durationMs);
+        } finally {
+            javaTestProjectService.cleanupIsolatedRun(projectDir);
         }
-    }
-
-    /** mvn komutunu çözer: wrapper → PATH → bilinen konumlar sırasıyla. */
-    private String resolveMaven(Path projectDir) {
-        // 1. wrapper (mvnw)
-        Path wrapper = projectDir.resolve("mvnw");
-        if (Files.exists(wrapper)) {
-            wrapper.toFile().setExecutable(true);
-            return wrapper.toAbsolutePath().toString();
-        }
-        // 2. bilinen kurulum konumları
-        for (String candidate : List.of(
-                "/usr/local/bin/mvn",
-                "/usr/bin/mvn",
-                "/opt/homebrew/bin/mvn",
-                System.getProperty("user.home") + "/.sdkman/candidates/maven/current/bin/mvn"
-        )) {
-            if (Files.exists(Path.of(candidate))) return candidate;
-        }
-        // 3. PATH'de varsay
-        return "mvn";
-    }
-
-    private int parseTestCount(String output) {
-        Matcher m = Pattern.compile("Tests run: (\\d+)").matcher(output);
-        return m.find() ? Integer.parseInt(m.group(1)) : 1;
     }
 }

@@ -5,6 +5,7 @@ import com.testgen.model.GeneratedTestCase;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestGenerationRequest;
 import com.testgen.model.TestRunStatus;
+import com.testgen.model.ValidationStatus;
 import com.testgen.generator.CodeCleaner;
 import com.testgen.repository.GeneratedTestCaseRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,9 +33,22 @@ public class FailureAnalysisService {
     private final LlmService llmService;
     private final GeneratedTestCaseRepository testCaseRepository;
     private final com.testgen.service.AgentLearningService agentLearningService;
+    private final com.testgen.generator.TestContentGate testContentGate;
 
     @Value("${test-generator.runner.max-heal-attempts:3}")
     private int maxHealAttempts;
+
+    /**
+     * Tek bir iyileştirme turunda en fazla kaç case onarılsın.
+     *
+     * NEDEN GEREKLİ: Her case 2 LLM çağrısı demek (hata analizi + yeniden üretim).
+     * Ölçülen bir koşumda 45 başarısız case, LLM'i 10 dakikadan uzun süre tekeline
+     * aldı ve o sırada başlatılan yeni üretimler hiç sıra bulamadı. Sınırın dışında
+     * kalan case'ler ATLANMIŞ SAYILMAZ: healAttempts artmadığı için sonraki turda
+     * yeniden ele alınırlar.
+     */
+    @Value("${test-generator.runner.max-heal-batch:10}")
+    private int maxHealBatch;
 
     public List<GeneratedTestCase> analyzeAndGenerateNew(
             List<GeneratedTestCase> failedCases,
@@ -64,10 +78,19 @@ public class FailureAnalysisService {
             return List.of();
         }
 
-        log.info("{} başarısız test analiz ediliyor (max: {}) — requestId: {}",
-                eligible.size(), maxHealAttempts, request.getId());
+        // LLM'i tek turda tüketmemek için parti sınırı; artan case'ler sonraki tura kalır
+        List<GeneratedTestCase> batch = eligible;
+        if (maxHealBatch > 0 && eligible.size() > maxHealBatch) {
+            batch = eligible.subList(0, maxHealBatch);
+            log.warn("İyileştirme parti sınırı ({}) uygulandı: {} case'ten {}'i bu turda onarılacak, "
+                            + "kalan {} case sonraki turda ele alınacak (deneme hakları harcanmadı).",
+                    maxHealBatch, eligible.size(), batch.size(), eligible.size() - batch.size());
+        }
 
-        return eligible.stream()
+        log.info("{} başarısız test analiz ediliyor (max deneme: {}) — requestId: {}",
+                batch.size(), maxHealAttempts, request.getId());
+
+        return batch.stream()
                 .map(failed -> analyzeOneAndGenerate(failed, request))
                 .filter(tc -> tc != null)
                 .collect(Collectors.toList());
@@ -101,17 +124,7 @@ public class FailureAnalysisService {
             // değişirse içindeki 'public class' adıyla uyuşmaz ve derleme hatası verir.
             String newName = failedCase.getTestName();
 
-            // Orijinal case'i supersede edilmiş olarak işaretle + heal count artır
-            failedCase.setSuperseded(true);
-            failedCase.setHealAttempts(nextVersion);
-            testCaseRepository.save(failedCase);
-
-            // Ders çıkar: aynı servise sonraki üretimlerde bu hata varsayımı tekrarlanmasın
-            agentLearningService.recordSelfHeal(request, failedCase, nextVersion);
-
-            log.info("✅ SELF-HEALING BAŞARILI v{}: {} (Orijinal dosyanın üzerine yazılacak)", nextVersion, failedCase.getTestName());
-
-            return GeneratedTestCase.builder()
+            GeneratedTestCase healed = GeneratedTestCase.builder()
                     .testName(newName)
                     .fileName(failedCase.getFileName())
                     .testContent(cleanContent)
@@ -126,6 +139,36 @@ public class FailureAnalysisService {
                     .llmPromptChars(prompt.length())
                     .llmResponseChars(llmRaw.length())
                     .build();
+
+            // ÜRETİM KAPISI self-healing için de geçerlidir: aksi hâlde "düzeltilmiş" içerik
+            // hiç doğrulanmadan kaydediliyor ve koşumda ayrıştırılamıyordu (canlıda ölçüldü:
+            // Karate case'i için Java kodu + açıklama metni döndü, "missing FEATURE at <EOF>").
+            testContentGate.apply(healed);
+
+            // ÇALIŞAN TESTİ BOZUK VERSİYONLA DEĞİŞTİRME.
+            // Canlıda ölçüldü: 11 senaryodan 8'i geçen bir case, ayrıştırılamayan bir "düzeltme"
+            // ile supersede edildi ve isteğin koşulabilir hâli 8/11'den 0/0'a düştü.
+            // Supersede yalnızca yeni versiyon doğrulamayı geçtiyse yapılır.
+            if (healed.getValidationStatus() == ValidationStatus.INVALID) {
+                log.warn("⛔ SELF-HEALING v{} doğrulamayı geçemedi, orijinal korunuyor — {}: {}",
+                        nextVersion, failedCase.getTestName(), firstLine(healed.getValidationError()));
+                // Deneme sayısı yine de artar; aksi hâlde aynı başarısız onarım sonsuz tekrarlanır
+                failedCase.setHealAttempts(nextVersion);
+                testCaseRepository.save(failedCase);
+                return null;
+            }
+
+            // Orijinal case'i supersede edilmiş olarak işaretle + heal count artır
+            failedCase.setSuperseded(true);
+            failedCase.setHealAttempts(nextVersion);
+            testCaseRepository.save(failedCase);
+
+            // Ders çıkar: aynı servise sonraki üretimlerde bu hata varsayımı tekrarlanmasın
+            agentLearningService.recordSelfHeal(request, failedCase, nextVersion);
+
+            log.info("✅ SELF-HEALING BAŞARILI v{}: {} (doğrulamadan geçti, orijinalin üzerine yazılacak)",
+                    nextVersion, failedCase.getTestName());
+            return healed;
 
         } catch (Exception e) {
             log.error("Self-healing başarısız — test: {}", failedCase.getTestName(), e);
@@ -182,5 +225,11 @@ public class FailureAnalysisService {
                         request.getUserStory()  != null ? request.getUserStory()  : "(yok)",
                         framework
                 );
+    }
+
+    private static String firstLine(String text) {
+        if (text == null) return "(mesaj yok)";
+        int nl = text.indexOf('\n');
+        return nl > 0 ? text.substring(0, nl) : text;
     }
 }

@@ -22,6 +22,22 @@
     <properties>
         <java.version>17</java.version>
 
+        <!-- JaCoCo prepare-agent bunu koşum anında doldurur; buradaki boş değer yalnızca
+             agent koşmadığı senaryolarda @{argLine} çözümlemesinin patlamamasını sağlar. -->
+        <argLine></argLine>
+
+        <!-- Kapsam alt sınırı. Regresyon kilidi: bu eşiğin altına düşen build KIRILIR.
+             Test kapsamı arttıkça kademeli yükseltilir. -->
+        <!--
+            Ölçülen değerler (dışlamalar sonrası): satır %74, dal %60.
+            Eşikler bunun hemen ALTINA konur — amaç mevcut seviyeyi kilitlemek ve
+            regresyonu kırmak; tam ölçüme eşitlemek, ilgisiz bir refaktörde tek satırlık
+            dalgalanmayı bile build hatasına çevirip kapıyı gürültü kaynağı yapardı.
+            Kapsam arttıkça bu değerler yükseltilir.
+        -->
+        <jacoco.line.coverage.min>0.72</jacoco.line.coverage.min>
+        <jacoco.branch.coverage.min>0.58</jacoco.branch.coverage.min>
+
         <!-- ── Karate: groupId io.karatelabs for modern JDK compatibility ── -->
         <karate.version>1.5.2</karate.version>
 
@@ -298,7 +314,18 @@
                         <include>**/*Test.java</include>
                         <include>**/*Tests.java</include>
                     </includes>
+                    <!--
+                        @{argLine} ZORUNLU: JaCoCo prepare-agent, java agent parametresini
+                        "argLine" property'sine yazar. Buradaki argLine sabit yazıldığında o
+                        property EZİLİYOR, agent hiç yüklenmiyor ve target/jacoco.exec HİÇ
+                        üretilmiyordu — yani kapsam raporu sessizce boş kalıyordu.
+                        @{...} geç değerlendirme sözdizimi; property'yi koşum anında araya alır.
+                        properties bloğundaki boş <argLine/> ise, prepare-agent koşmadan
+                        surefire tek başına çağrıldığında (mvn surefire:test) çözümlemenin
+                        patlamaması için varsayılan sağlar.
+                    -->
                     <argLine>
+                        @{argLine}
                         -Dallure.results.directory=${project.build.directory}/allure-results
                         -Dorg.aspectj.weaver.Dump.exception=false
                         -Dorg.aspectj.weaver.Dump.at.abort=false
@@ -332,6 +359,42 @@
                         <id>report</id>
                         <phase>test</phase>
                         <goals><goal>report</goal></goals>
+                    </execution>
+                    <!--
+                        Kalite kapısı: rapor üretmek tek başına yetmez — kimse bakmazsa
+                        kapsam sessizce düşer. check goal'ü eşiğin altına inen build'i kırar.
+                        Eşikler properties bloğunda; kapsam arttıkça yükseltilir.
+                    -->
+                    <execution>
+                        <id>check-coverage</id>
+                        <phase>verify</phase>
+                        <goals><goal>check</goal></goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.line.coverage.min}</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.branch.coverage.min}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                            <excludes>
+                                <!-- Veri taşıyıcıları ve Spring giriş noktası: davranış içermez,
+                                     kapsam yüzdesini yapay şişirir/düşürür. -->
+                                <exclude>com/testgen/AiTestGeneratorApplication.class</exclude>
+                                <exclude>com/testgen/model/**</exclude>
+                                <exclude>com/testgen/**/*Dto.class</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

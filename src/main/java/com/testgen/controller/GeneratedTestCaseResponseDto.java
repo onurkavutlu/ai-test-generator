@@ -4,8 +4,12 @@ import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import com.testgen.model.GeneratedTestCase;
+import com.testgen.model.TestCategory;
+import com.testgen.model.TestDesignTechnique;
 import com.testgen.model.TestFramework;
+import com.testgen.model.TestLevel;
 import com.testgen.model.TestRunStatus;
+import com.testgen.model.ValidationStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,9 +34,21 @@ public record GeneratedTestCaseResponseDto(
         Integer failedScenarios,
         Long executionTimeMs,
         LocalDateTime createdAt,
-        LocalDateTime lastRunAt
+        LocalDateTime lastRunAt,
+        ValidationStatus validationStatus,
+        String validationError,
+        int validationAttempts,
+        // ISTQB sınıflandırması — hangi test sınıfının geçtiğini/düştüğünü ölçmek için
+        TestCategory testCategory,
+        TestLevel testLevel,
+        TestDesignTechnique testDesignTechnique,
+        /** İçerik LLM'den değil gözlemden deterministik üretildi mi? */
+        boolean deterministic
 ) {
     public static GeneratedTestCaseResponseDto from(GeneratedTestCase testCase) {
+        // Aynı özet metni dört kez ayrıştırılıyordu; 45 case'lik bir listede bu
+        // 180 gereksiz ayrıştırma demekti. Bir kez çözülüp yeniden kullanılır.
+        Insight insight = Insight.fromSummary(testCase.getTestSummary());
         return new GeneratedTestCaseResponseDto(
                 testCase.getId(),
                 testCase.getRequest() != null ? testCase.getRequest().getId() : null,
@@ -40,10 +56,10 @@ public record GeneratedTestCaseResponseDto(
                 testCase.getFileName(),
                 testCase.getTestContent(),
                 testCase.getTestSummary(),
-                Insight.fromSummary(testCase.getTestSummary()).tags(),
-                Insight.fromSummary(testCase.getTestSummary()).source(),
-                Insight.fromSummary(testCase.getTestSummary()).generationNarrative(),
-                Insight.fromSummary(testCase.getTestSummary()).improvementNarrative(),
+                insight.tags(),
+                insight.source(),
+                insight.generationNarrative(),
+                insight.improvementNarrative(),
                 testCase.getFramework(),
                 testCase.getRunStatus(),
                 testCase.getRunOutput(),
@@ -52,7 +68,14 @@ public record GeneratedTestCaseResponseDto(
                 testCase.getFailedScenarios(),
                 testCase.getExecutionTimeMs(),
                 testCase.getCreatedAt(),
-                testCase.getLastRunAt()
+                testCase.getLastRunAt(),
+                testCase.getValidationStatus(),
+                testCase.getValidationError(),
+                testCase.getValidationAttempts(),
+                testCase.getTestCategory(),
+                testCase.getTestLevel(),
+                testCase.getTestDesignTechnique(),
+                testCase.isDeterministic()
         );
     }
 

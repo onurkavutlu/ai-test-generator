@@ -67,8 +67,10 @@ public class LlmReportController {
     public ResponseEntity<List<Map<String, Object>>> getLlmCalls(
             @RequestParam(required = false) String type) {
 
+        // Locale.ROOT şart: Türkçe locale'de "generic".toUpperCase() → "GENERİC" olur ve
+        // hiçbir kayda eşleşmez; filtre sessizce boş liste döner.
         List<LlmCallReport> reports = type != null
-                ? llmReportStore.byType(type.toUpperCase())
+                ? llmReportStore.byType(type.toUpperCase(java.util.Locale.ROOT))
                 : llmReportStore.all();
 
         List<Map<String, Object>> result = reports.stream().map(r -> {

@@ -704,6 +704,12 @@
       <div class="nav-link" onclick="switchView('suites')" id="nav-suites">
         <span>📦</span> Test Suites
       </div>
+      <div class="nav-link" onclick="switchView('plans')" id="nav-plans">
+        <span>🗂️</span> Test Plans
+      </div>
+      <div class="nav-link" onclick="switchView('executions')" id="nav-executions">
+        <span>🧾</span> Test Executions
+      </div>
       <a class="nav-link" href="/comparer" style="text-decoration:none;">
         <span>⚖️</span> Endpoint Comparer
       </a>
@@ -1014,7 +1020,7 @@
 
               <div class="form-group" style="margin:0;" id="runner-group-swagger">
                 <label class="form-label">Swagger URL</label>
-                <input class="form-control" type="url" id="runner-swaggerUrl" placeholder="https://petstore3.swagger.io/api/v3/openapi.json">
+                <input class="form-control" type="url" id="runner-swaggerUrl" placeholder="https://fakerestapi.azurewebsites.net/swagger/v1/swagger.json">
               </div>
 
               <div class="form-group" style="margin:0;display:none;" id="runner-group-appUrl">
@@ -1240,6 +1246,76 @@
       </div>
     </div>
 
+    <!-- VIEW: TEST PLANS -->
+    <div class="view-section" id="view-plans">
+      <div class="view-header">
+        <div class="view-title-section">
+          <h2>🗂️ Test Plans</h2>
+          <p>Test Plan → Test Suite → Test Execution: kapsamı paketleyin, istediğiniz zaman yeniden koşturun</p>
+        </div>
+        <button class="btn btn-secondary" onclick="loadPlans()">🔄 Yenile</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start;">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="code-container" style="height:auto;">
+            <div class="code-container-header"><span style="font-size:13px;font-weight:600;color:#e2e8f0;">➕ Yeni Plan</span></div>
+            <div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
+              <input class="form-control" id="plan-new-name" placeholder="Plan adı (örn: R2025.4 Regresyon Planı)">
+              <input class="form-control" id="plan-new-version" placeholder="Sürüm / Sprint (opsiyonel)">
+              <input class="form-control" id="plan-new-desc" placeholder="Açıklama (opsiyonel)">
+              <button class="btn btn-primary" style="padding:8px;" onclick="createPlan()">Oluştur</button>
+            </div>
+          </div>
+          <div class="code-container" style="height:auto;">
+            <div class="code-container-header"><span style="font-size:13px;font-weight:600;color:#e2e8f0;">🗂️ Planlar</span></div>
+            <div id="plan-list" style="padding:8px;display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <div class="code-container" style="height:auto;" id="plan-detail-panel">
+          <div class="code-container-header" style="justify-content:space-between;">
+            <span style="font-size:13px;font-weight:600;color:#e2e8f0;" id="plan-detail-title">Plan seçin</span>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;display:none;" id="plan-delete-btn" onclick="deletePlan()">🗑 Sil</button>
+              <button class="btn btn-primary" style="padding:4px 14px;font-size:12px;display:none;" id="plan-run-btn" onclick="runPlan()">▶ Planı Koştur</button>
+            </div>
+          </div>
+          <div style="padding:14px;" id="plan-detail-body">
+            <div style="color:var(--text-dim);font-size:13px;text-align:center;padding:30px;">Soldan bir plan seçin veya yeni oluşturun.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: TEST EXECUTIONS -->
+    <div class="view-section" id="view-executions">
+      <div class="view-header">
+        <div class="view-title-section">
+          <h2>🧾 Test Executions</h2>
+          <p>Koşum geçmişi — her koşumun case bazlı sonucu kalıcı olarak saklanır, aynı kapsam tekrar koşulabilir</p>
+        </div>
+        <button class="btn btn-secondary" onclick="loadExecutions()">🔄 Yenile</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start;">
+        <div class="code-container" style="height:auto;">
+          <div class="code-container-header"><span style="font-size:13px;font-weight:600;color:#e2e8f0;">🧾 Koşumlar</span></div>
+          <div id="execution-list" style="padding:8px;display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto;"></div>
+        </div>
+
+        <div class="code-container" style="height:auto;">
+          <div class="code-container-header" style="justify-content:space-between;">
+            <span style="font-size:13px;font-weight:600;color:#e2e8f0;" id="execution-detail-title">Koşum seçin</span>
+            <button class="btn btn-primary" style="padding:4px 14px;font-size:12px;display:none;" id="execution-rerun-btn" onclick="rerunExecution()">🔁 Yeniden Koştur</button>
+          </div>
+          <div style="padding:14px;" id="execution-detail-body">
+            <div style="color:var(--text-dim);font-size:13px;text-align:center;padding:30px;">Soldan bir koşum seçin.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="view-section" id="view-system-logs">
       <div class="view-header">
         <div class="view-title-section">
@@ -1323,8 +1399,33 @@
     window.addEventListener('DOMContentLoaded', () => {
       loadRequests();
       loadLlmSummary();
-      setInterval(loadRequests, 10000); // Auto refresh table state
+      startRequestsPolling();
     });
+
+    /**
+     * Test istekleri tablosunun otomatik yenilenmesi.
+     *
+     * Önceden koşulsuz bir setInterval vardı: sayfa açık kaldığı sürece, hangi
+     * sekmede olunursa olunsun, sekme arka planda olsa bile 10 saniyede bir
+     * /api/v1/tests çağrılıyordu. Açık bırakılan bir dashboard gece boyunca
+     * binlerce gereksiz sorgu üretiyordu.
+     *
+     * Artık yalnızca Test İstekleri görünümü açıkken VE sekme görünürken yenilenir.
+     */
+    function startRequestsPolling() {
+      setInterval(() => {
+        if (currentView === 'requests' && !document.hidden) {
+          loadRequests();
+        }
+      }, 10000);
+
+      // Sekmeye geri dönüldüğünde bir sonraki turu beklemeden tazele
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && currentView === 'requests') {
+          loadRequests();
+        }
+      });
+    }
 
     // View Routing
     function switchView(viewName) {
@@ -1337,6 +1438,11 @@
       currentView = viewName;
       if (viewName === 'requests') {
         loadRequests();
+      } else if (viewName === 'create') {
+        // Runner'daki ile aynı sorun: framework listesi adaptFrameworkOptions()
+        // ile dolar ama bu yalnızca testType'ın onchange'ine bağlıydı. İlk açılışta
+        // statik HTML'deki tek seçenek (KARATE) kalıp REST_ASSURED seçilemiyordu.
+        adaptFrameworkOptions();
       } else if (viewName === 'stats') {
         loadLlmSummary();
         loadLlmCalls();
@@ -1345,10 +1451,19 @@
       } else if (viewName === 'system-logs') {
         fetchSystemLogs();
       } else if (viewName === 'runner') {
+        // Framework listesi test tipine göre runnerAdaptFramework() ile doldurulur.
+        // Bu yalnızca testType'ın onchange'ine bağlıydı; sayfa ilk açıldığında
+        // statik HTML'deki tek seçenek (KARATE) kalıyor ve kullanıcı REST_ASSURED'ı
+        // seçemiyordu. Görünüm açılırken bir kez senkronize et.
+        runnerAdaptFramework();
         runnerUpdateBodyPreview();
         populateSuiteDropdown('genfrom-suite');
       } else if (viewName === 'suites') {
         loadSuites();
+      } else if (viewName === 'plans') {
+        loadPlans();
+      } else if (viewName === 'executions') {
+        loadExecutions();
       }
     }
 
@@ -1405,8 +1520,20 @@
         .catch(err => console.error("Test istekleri yüklenemedi:", err));
     }
 
+    // "Koşulan Testler" kartı: satırlar zaten her istek için /cases çağırıp
+    // PASSED/FAILED sayıyor; kart da AYNI veriden beslenir. Satır bazlı istekler
+    // asenkron döndüğü için toplam burada birikir ve her yanıtta karta yazılır.
+    let ranCaseTotal = 0;
+
+    function refreshRanCard() {
+      const el = document.getElementById('stats-ran');
+      if (el) el.innerText = ranCaseTotal;
+    }
+
     function populateRequestsTable(requests) {
       const tbody = document.getElementById('requests-table-body');
+      ranCaseTotal = 0;
+      refreshRanCard();
       if (requests.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 32px;">Kayıtlı test isteği bulunamadı.</td></tr>`;
         return;
@@ -1475,7 +1602,10 @@
             const passed = cases.filter(c => c.runStatus === 'PASSED').length;
             const failed = cases.filter(c => c.runStatus === 'FAILED').length;
             const notRun = cases.filter(c => c.runStatus === 'NOT_RUN').length;
-            
+
+            ranCaseTotal += passed + failed;
+            refreshRanCard();
+
             container.innerHTML = `
               <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                 <span class="badge badge-success" title="Passed">${passed}</span>
@@ -1492,12 +1622,10 @@
     function updateSummaryCards(requests) {
       document.getElementById('stats-total').innerText = requests.length;
       document.getElementById('stats-generated').innerText = requests.filter(r => r.status === 'GENERATED').length;
-      
-      let totalRan = 0;
-      requests.forEach(r => {
-        totalRan += (r.scheduledRunCount || 0);
-      });
-      document.getElementById('stats-ran').innerText = totalRan;
+      // "Koşulan Testler" burada HESAPLANMAZ: /api/v1/tests yanıtı gerçek koşum
+      // sayısını taşımaz (scheduledRunCount yalnızca ZAMANLAYICI koşumlarını sayar,
+      // elle çalıştırılan testler için 0 kalır). Kart populateRequestsTable içindeki
+      // /cases yanıtlarından beslenir.
     }
 
     // Handle form submit for test generation
@@ -1769,10 +1897,12 @@
       btn.disabled = true;
       btn.innerText = '🔧 İyileştiriliyor...';
 
-      fetch(`/api/v1/scheduler/${activeRequestId}/trigger-now`, { method: 'POST' })
+      // Not: /self-heal yalnızca BAŞARISIZ case'leri iyileştirir. Eskiden burada
+      // scheduler/trigger-now çağrılıyordu; o uç tüm testleri baştan koşuyordu.
+      fetch(`/api/v1/tests/${activeRequestId}/self-heal`, { method: 'POST' })
         .then(res => res.json())
         .then(data => {
-          showToast(`Self-healing tamamlandı! ${data.newGenerated || 0} yeni test üretildi.`, true);
+          showToast(data.message || 'İyileştirme başlatıldı.', (data.failedCases || 0) > 0);
           loadRequestCases(activeRequestId);
         })
         .catch(() => showToast("Self-healing başarısız.", false))
@@ -2034,10 +2164,10 @@
     function runSelfHealingFromTable(requestId, event) {
       if (event) event.stopPropagation();
       showToast("Self-Healing tetikleniyor...", true);
-      fetch(`/api/v1/scheduler/${requestId}/trigger-now`, { method: 'POST' })
+      fetch(`/api/v1/tests/${requestId}/self-heal`, { method: 'POST' })
         .then(res => res.json())
         .then(data => {
-          showToast(`Self-healing tamamlandı! ${data.newGenerated || 0} yeni test üretildi.`, true);
+          showToast(data.message || 'İyileştirme başlatıldı.', (data.failedCases || 0) > 0);
           loadRequests();
         })
         .catch(() => showToast("Self-healing başarısız.", false));
@@ -2087,6 +2217,244 @@
         });
         sel.value = prev;
       } catch (e) { /* sessiz — dropdown opsiyonel */ }
+    }
+
+
+    // ── TEST PLAN / TEST EXECUTION ────────────────────────────
+    let activePlanId = null;
+    let activeExecutionId = null;
+
+    const EXEC_STATUS_COLOR = {
+      PASSED: 'var(--color-success)', FAILED: 'var(--color-danger)',
+      RUNNING: 'var(--color-primary)', PENDING: 'var(--text-muted)', ABORTED: 'var(--text-muted)'
+    };
+
+    function execStatusBadge(status) {
+      const color = EXEC_STATUS_COLOR[status] || 'var(--text-muted)';
+      return `<span style="font-size:11px;font-weight:600;color:${color};">${escapeHtml(status || '-')}</span>`;
+    }
+
+    async function loadPlans() {
+      const list = document.getElementById('plan-list');
+      try {
+        const plans = await (await fetch('/api/v1/plans')).json();
+        list.innerHTML = plans.length === 0
+          ? '<div style="color:var(--text-dim);font-size:12px;text-align:center;padding:16px;">Henüz plan yok.</div>'
+          : '';
+        plans.forEach(p => {
+          const summary = p.lastExecutedAt
+            ? `✅ ${p.lastExecutionPassed ?? 0} / ❌ ${p.lastExecutionFailed ?? 0}`
+            : 'henüz koşulmadı';
+          const div = document.createElement('div');
+          div.className = 'file-item';
+          div.style.cursor = 'pointer';
+          div.onclick = () => openPlan(p.id);
+          div.innerHTML = `<span class="file-name">${escapeHtml(p.name)}${p.version ? ' <span style="color:var(--text-muted);font-size:11px;">(' + escapeHtml(p.version) + ')</span>' : ''}</span>
+            <span style="font-size:11px;color:var(--text-muted);">${p.suiteCount} suite · ${summary}</span>`;
+          list.appendChild(div);
+        });
+      } catch (e) {
+        list.innerHTML = '<div style="color:var(--color-danger);font-size:12px;">Yüklenemedi: ' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    async function createPlan() {
+      const name = document.getElementById('plan-new-name').value.trim();
+      if (!name) { showToast('Plan adı girin.', false); return; }
+      const resp = await fetch('/api/v1/plans', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          version: document.getElementById('plan-new-version').value.trim(),
+          description: document.getElementById('plan-new-desc').value.trim()
+        })
+      });
+      if (!resp.ok) { showToast('Plan oluşturulamadı.', false); return; }
+      const plan = await resp.json();
+      document.getElementById('plan-new-name').value = '';
+      document.getElementById('plan-new-version').value = '';
+      document.getElementById('plan-new-desc').value = '';
+      showToast('Plan oluşturuldu.', true);
+      await loadPlans();
+      openPlan(plan.id);
+    }
+
+    async function openPlan(planId) {
+      activePlanId = planId;
+      const body = document.getElementById('plan-detail-body');
+      document.getElementById('plan-run-btn').style.display = 'inline-flex';
+      document.getElementById('plan-delete-btn').style.display = 'inline-flex';
+      body.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:20px;text-align:center;">Yükleniyor…</div>';
+      try {
+        const [plan, suites, executions] = await Promise.all([
+          (await fetch('/api/v1/plans/' + planId)).json(),
+          (await fetch('/api/v1/suites')).json(),
+          (await fetch('/api/v1/executions?planId=' + planId)).json()
+        ]);
+        document.getElementById('plan-detail-title').innerText =
+          plan.name + (plan.version ? ' · ' + plan.version : '');
+
+        const attachedIds = new Set((plan.suites || []).map(s => s.id));
+        const attachedHtml = (plan.suites || []).length === 0
+          ? '<div style="color:var(--text-dim);font-size:12px;">Plana henüz suite eklenmedi.</div>'
+          : plan.suites.map(s => `<div class="file-item">
+                <span class="file-name">${escapeHtml(s.name)}</span>
+                <span style="display:flex;align-items:center;gap:8px;">
+                  <span style="font-size:11px;color:var(--text-muted);">${s.caseCount} case</span>
+                  <button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;"
+                          onclick="detachSuite('${s.id}')">Çıkar</button>
+                </span></div>`).join('');
+
+        const available = suites.filter(s => !attachedIds.has(s.id));
+        const addHtml = available.length === 0
+          ? '<div style="color:var(--text-dim);font-size:12px;">Eklenebilecek başka suite yok.</div>'
+          : `<div style="display:flex;gap:8px;">
+               <select class="form-control" id="plan-suite-select" style="flex:1;">
+                 ${available.map(s => `<option value="${s.id}">${escapeHtml(s.name)} (${s.caseCount} case)</option>`).join('')}
+               </select>
+               <button class="btn btn-primary" style="padding:6px 14px;" onclick="attachSuite()">Ekle</button>
+             </div>`;
+
+        const execHtml = executions.length === 0
+          ? '<div style="color:var(--text-dim);font-size:12px;">Bu plan için henüz koşum yok.</div>'
+          : executions.slice(0, 8).map(e => `<div class="file-item" style="cursor:pointer;"
+                onclick="switchView('executions'); openExecution('${e.id}')">
+                <span class="file-name">${escapeHtml(new Date(e.createdAt).toLocaleString('tr-TR'))}</span>
+                <span style="font-size:11px;color:var(--text-muted);">
+                  ${execStatusBadge(e.status)} · ✅ ${e.passedCases} / ❌ ${e.failedCases}
+                </span></div>`).join('');
+
+        body.innerHTML = `
+          ${plan.description ? `<p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">${escapeHtml(plan.description)}</p>` : ''}
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">KAPSAMDAKİ SUITE'LER</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">${attachedHtml}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">SUITE EKLE</div>
+          <div style="margin-bottom:18px;">${addHtml}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">
+            KOŞULACAK TEST CASE'LER (${(plan.cases || []).length})</div>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:18px;max-height:200px;overflow-y:auto;">
+            ${(plan.cases || []).length === 0
+              ? '<div style="color:var(--text-dim);font-size:12px;">Kapsamda koşulabilir case yok.</div>'
+              : plan.cases.map(c => `<div class="file-item">
+                  <span class="file-name">${escapeHtml(c.testName)}</span>
+                  <span style="font-size:11px;color:var(--text-muted);">${escapeHtml(c.framework)} · ${escapeHtml(c.runStatus || 'NOT_RUN')}</span>
+                </div>`).join('')}
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">SON KOŞUMLAR</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">${execHtml}</div>`;
+      } catch (e) {
+        body.innerHTML = '<div style="color:var(--color-danger);font-size:12px;">Yüklenemedi: ' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    async function attachSuite() {
+      const select = document.getElementById('plan-suite-select');
+      if (!activePlanId || !select) return;
+      const resp = await fetch(`/api/v1/plans/${activePlanId}/suites/${select.value}`, { method: 'POST' });
+      showToast(resp.ok ? 'Suite plana eklendi.' : 'Suite eklenemedi.', resp.ok);
+      if (resp.ok) { await loadPlans(); openPlan(activePlanId); }
+    }
+
+    async function detachSuite(suiteId) {
+      if (!activePlanId) return;
+      const resp = await fetch(`/api/v1/plans/${activePlanId}/suites/${suiteId}`, { method: 'DELETE' });
+      showToast(resp.ok ? 'Suite plandan çıkarıldı.' : 'Suite çıkarılamadı.', resp.ok);
+      if (resp.ok) { await loadPlans(); openPlan(activePlanId); }
+    }
+
+    async function deletePlan() {
+      if (!activePlanId) return;
+      const resp = await fetch('/api/v1/plans/' + activePlanId, { method: 'DELETE' });
+      showToast(resp.ok ? 'Plan silindi.' : 'Plan silinemedi.', resp.ok);
+      if (resp.ok) {
+        activePlanId = null;
+        document.getElementById('plan-detail-title').innerText = 'Plan seçin';
+        document.getElementById('plan-run-btn').style.display = 'none';
+        document.getElementById('plan-delete-btn').style.display = 'none';
+        document.getElementById('plan-detail-body').innerHTML =
+          '<div style="color:var(--text-dim);font-size:13px;text-align:center;padding:30px;">Soldan bir plan seçin veya yeni oluşturun.</div>';
+        loadPlans();
+      }
+    }
+
+    async function runPlan() {
+      if (!activePlanId) return;
+      const resp = await fetch(`/api/v1/plans/${activePlanId}/run`, { method: 'POST' });
+      if (!resp.ok) { showToast('Plan koşumu başlatılamadı.', false); return; }
+      const data = await resp.json();
+      showToast(`Plan koşumu başlatıldı (${data.caseCount} case).`, true);
+      setTimeout(() => { loadPlans(); openPlan(activePlanId); }, 4000);
+    }
+
+    async function loadExecutions() {
+      const list = document.getElementById('execution-list');
+      try {
+        const executions = await (await fetch('/api/v1/executions')).json();
+        list.innerHTML = executions.length === 0
+          ? '<div style="color:var(--text-dim);font-size:12px;text-align:center;padding:16px;">Henüz koşum yok.</div>'
+          : '';
+        executions.forEach(e => {
+          const div = document.createElement('div');
+          div.className = 'file-item';
+          div.style.cursor = 'pointer';
+          div.onclick = () => openExecution(e.id);
+          div.innerHTML = `<span class="file-name">${escapeHtml(e.name)}</span>
+            <span style="font-size:11px;color:var(--text-muted);display:flex;gap:8px;align-items:center;">
+              ${execStatusBadge(e.status)} · ✅ ${e.passedCases} / ❌ ${e.failedCases}
+            </span>`;
+          list.appendChild(div);
+        });
+      } catch (e) {
+        list.innerHTML = '<div style="color:var(--color-danger);font-size:12px;">Yüklenemedi: ' + escapeHtml(e.message) + '</div>';
+      }
+    }
+
+    async function openExecution(executionId) {
+      activeExecutionId = executionId;
+      const body = document.getElementById('execution-detail-body');
+      document.getElementById('execution-rerun-btn').style.display = 'inline-flex';
+      body.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:20px;text-align:center;">Yükleniyor…</div>';
+      try {
+        const e = await (await fetch('/api/v1/executions/' + executionId)).json();
+        document.getElementById('execution-detail-title').innerText = e.name;
+        const scope = e.planName ? `Plan: ${e.planName}` : (e.suiteName ? `Suite: ${e.suiteName}` : 'Kapsam belirtilmedi');
+        const rows = (e.results || []).length === 0
+          ? '<div style="color:var(--text-dim);font-size:12px;">Bu koşumda case sonucu kaydedilmedi.</div>'
+          : e.results.map(r => `<div class="file-item">
+                <span class="file-name">${escapeHtml(r.testName)}</span>
+                <span style="font-size:11px;color:var(--text-muted);display:flex;gap:10px;">
+                  <span>${escapeHtml(r.framework || '-')}</span>
+                  <span style="color:${r.runStatus === 'PASSED' ? 'var(--color-success)' : 'var(--color-danger)'};font-weight:600;">${escapeHtml(r.runStatus || '-')}</span>
+                  <span>${r.passedScenarios ?? 0}/${r.totalScenarios ?? 0} senaryo</span>
+                  <span>${r.executionTimeMs != null ? (r.executionTimeMs / 1000).toFixed(2) + 's' : '–'}</span>
+                </span></div>`).join('');
+        body.innerHTML = `
+          <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin-bottom:14px;">
+            <span>${escapeHtml(scope)}</span>
+            <span>Tetikleyici: <strong>${escapeHtml(e.trigger || '-')}</strong></span>
+            <span>Durum: ${execStatusBadge(e.status)}</span>
+            <span>Geçme oranı: <strong>${e.passRate}%</strong></span>
+            <span>Süre: <strong>${e.durationMs != null ? (e.durationMs / 1000).toFixed(1) + 's' : '–'}</strong></span>
+          </div>
+          ${e.sourceExecutionId ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Kaynak koşum: ${escapeHtml(e.sourceExecutionId)}</div>` : ''}
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">CASE SONUÇLARI (${(e.results || []).length})</div>
+          <div style="display:flex;flex-direction:column;gap:4px;max-height:360px;overflow-y:auto;">${rows}</div>
+          <div style="margin-top:14px;">
+            <a class="btn btn-secondary" style="padding:6px 14px;font-size:12px;text-decoration:none;"
+               href="/reports/cucumber/${e.id}" target="_blank">🥒 Cucumber Raporu</a>
+          </div>`;
+      } catch (err) {
+        body.innerHTML = '<div style="color:var(--color-danger);font-size:12px;">Yüklenemedi: ' + escapeHtml(err.message) + '</div>';
+      }
+    }
+
+    async function rerunExecution() {
+      if (!activeExecutionId) return;
+      const resp = await fetch(`/api/v1/executions/${activeExecutionId}/rerun`, { method: 'POST' });
+      if (!resp.ok) { showToast('Yeniden koşum başlatılamadı.', false); return; }
+      const data = await resp.json();
+      showToast(`Yeniden koşum başlatıldı (${data.caseCount} case).`, true);
+      setTimeout(loadExecutions, 4000);
     }
 
     async function loadSuites() {
@@ -2323,7 +2691,15 @@
         const badge  = document.getElementById('direct-status-badge');
         const latency = document.getElementById('direct-latency');
         const bodyEl = document.getElementById('direct-response-body');
+        const genFrom = document.getElementById('direct-genfrom');
         result.style.display = '';
+
+        // "Bu Yanıttan Test Üret" paneli YALNIZCA gerçek bir yanıt varken gösterilir.
+        // Önceden istek engellendiğinde/başarısız olduğunda da açık kalıyordu: ortada
+        // yanıt yokken "yanıttan test üret" teklif ediliyordu. Sunucu bunu zaten
+        // reddediyor, ama arayüzün olmayan bir gözlemden üretim önermesi yanıltıcı.
+        const hasRealResponse = res.ok && !data.error;
+        if (genFrom) genFrom.style.display = hasRealResponse ? '' : 'none';
 
         if (!res.ok) {
           badge.textContent = 'HATA';

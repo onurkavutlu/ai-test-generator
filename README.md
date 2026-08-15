@@ -42,12 +42,35 @@ Projede varsayılan olarak **`llama3.1`** modeli kullanılmaktadır. Açık kayn
 
 ## Hızlı Başlangıç
 
-En kolay kurulum yöntemi, projeyle birlikte gelen otomatik kurulum scriptini kullanmaktır. Bu script Docker, PostgreSQL, MailHog, Allure, Selenium Grid ve eksikse Ollama (LLM) bağımlılıklarını tek komutla kurup sistemi ayağa kaldırır.
+### Önkoşullar
+Yeni bir makinede yalnızca şunlar gerekir:
+
+| Gereksinim | Zorunlu mu? | Not |
+|------------|-------------|-----|
+| **Docker Desktop** | Evet | Uygulama, PostgreSQL, Selenium Grid, MailHog ve Allure buradan ayağa kalkar |
+| **Git** | Evet | Repoyu klonlamak için |
+| **Ollama** | Evet (LLM üretimi için) | `setup.sh` kurulu değilse otomatik kurar |
+| Java / Maven | Hayır | Build Docker içinde yapılır; lokal geliştirme için `./mvnw` yeterli (Maven kurulumu gerekmez) |
+
+### Kurulum (tek seferde)
 
 ```bash
-# Tüm sistemi tek komutla kurup başlatmak için:
+git clone https://github.com/onurkavutlu/ai-test-generator.git
+cd ai-test-generator
+cp .env.example .env
 chmod +x setup.sh && ./setup.sh
 ```
+
+`setup.sh`; Docker'ı doğrular, eksikse Ollama'yı kurup modeli indirir ve tüm servisleri (uygulama, PostgreSQL, MailHog, Allure, Selenium Grid) tek komutla ayağa kaldırır.
+
+Scripti kullanmadan doğrudan başlatmak isterseniz:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+> **LLM notu:** Varsayılan model `llama3.1`. Çoklu ajan orkestrasyonu (Supervisor) **tool calling** desteği gerektirdiği için bu özelliği desteklemeyen küçük modeller seçilirse sistem sıralı fallback moduna düşer. Modeli `.env` içindeki `OLLAMA_MODEL` ile değiştirebilirsiniz.
 
 ### Manuel Geliştirme Ortamı (Docker Olmadan)
 Eğer Docker kullanmak istemiyorsanız ve sadece in-memory (H2) veritabanıyla projeyi test etmek isterseniz (Java 17+ gerektirir):
