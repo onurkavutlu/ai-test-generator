@@ -5,6 +5,10 @@ import java.time.LocalDateTime;
 /**
  * Tek bir LLM çağrısının metriklerini ve üretilen içeriği tutar.
  * OllamaLlmService her generateXxx çağrısında bu nesneyi üretir.
+ *
+ * <p>{@code requestId} ve {@code phase} korelasyon alanlarıdır ve
+ * {@link LlmCallContext}'ten okunur. Bağlam kurulmamışsa {@code null} kalırlar —
+ * bilinmeyen korelasyon uydurulmaz, boş bırakılır.
  */
 public record LlmCallReport(
                 String model,
@@ -16,7 +20,26 @@ public record LlmCallReport(
                 boolean success,
                 String errorMessage, // null ise başarılı
                 String rawResponse,
-                LocalDateTime calledAt) {
+                LocalDateTime calledAt,
+                /** Çağrının ait olduğu üretim isteği; bilinmiyorsa null. */
+                String requestId,
+                /** GENERATION | VALIDATION_REPAIR | SELF_HEAL | BENCHMARK | RUNNER */
+                String phase) {
+
+        /**
+         * Korelasyonu bağlamdan okuyan kısa yapıcı. Mevcut çağrı yerlerinin hiçbiri
+         * değişmesin diye eklendi: requestId'yi taşımayan derin katmanlar bu yapıcıyı
+         * kullanmaya devam eder, korelasyon {@link LlmCallContext}'ten gelir.
+         */
+        public LlmCallReport(String model, String callType, String promptSummary,
+                        int promptChars, int responseChars, long durationMs,
+                        boolean success, String errorMessage, String rawResponse,
+                        LocalDateTime calledAt) {
+                this(model, callType, promptSummary, promptChars, responseChars, durationMs,
+                                success, errorMessage, rawResponse, calledAt,
+                                LlmCallContext.currentRequestId(), LlmCallContext.currentPhase());
+        }
+
         /** Başarılı çağrı için kısa fabrika. */
         public static LlmCallReport success(String model, String callType,
                         String prompt, String response, long durationMs) {

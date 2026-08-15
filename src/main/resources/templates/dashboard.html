@@ -870,9 +870,26 @@
         </div>
       </div>
 
-      <div class="view-title-section" style="margin-top: 16px;">
-        <h3>Son LLM Çağrı Geçmişi</h3>
+      <div class="view-title-section" style="margin-top: 16px; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+        <h3 style="margin:0;">Son LLM Çağrı Geçmişi</h3>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <label style="font-size:12px; color:var(--text-muted);" for="llm-filter-request">İstek</label>
+          <select id="llm-filter-request" onchange="loadLlmCalls()"
+                  style="min-width:280px; padding:6px 8px; font-size:12px;">
+            <option value="">Tümü</option>
+          </select>
+          <label style="font-size:12px; color:var(--text-muted);" for="llm-filter-phase">Faz</label>
+          <select id="llm-filter-phase" onchange="loadLlmCalls()"
+                  style="min-width:160px; padding:6px 8px; font-size:12px;">
+            <option value="">Tümü</option>
+          </select>
+        </div>
       </div>
+
+      <!-- Seçili isteğin maliyeti: çağrı sayısı, toplam süre, tahmini token -->
+      <div id="llm-request-cost" style="display:none; margin-bottom:12px; padding:10px 14px;
+           border:1px solid rgba(255,255,255,0.08); border-radius:8px;
+           background:rgba(99,102,241,0.07); font-size:12.5px;"></div>
 
       <!-- LLM Call List Table -->
       <div class="table-container">
@@ -880,6 +897,8 @@
           <thead>
             <tr>
               <th>Zaman</th>
+              <th>İstek</th>
+              <th>Faz</th>
               <th>Tip</th>
               <th>Durum</th>
               <th>Süre (ms)</th>
@@ -889,7 +908,7 @@
           </thead>
           <tbody id="llm-calls-table-body">
             <tr>
-              <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 32px;">
+              <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 32px;">
                 Yükleniyor...
               </td>
             </tr>
@@ -1166,6 +1185,11 @@
           </div>
 
           <!-- Test Cases Listesi -->
+          <!-- GÖZLENEN YANIT: üretilen her assertion'ın dayanağı.
+               Case'lerin ÜSTÜNDE durur — kullanıcı testlere bakmadan önce neye
+               dayandıklarını görsün. Gözlem yapılamadıysa nedeni burada yazar. -->
+          <div id="runner-observed-section" style="display:none; margin-bottom:14px;"></div>
+
           <div id="runner-cases-section" style="display:none;">
             <div class="code-container" style="height:auto;">
               <div class="code-container-header" style="justify-content:space-between;">
@@ -1685,25 +1709,69 @@
         .catch(err => console.error("LLM özet rapor alınamadı:", err));
     }
 
+    /**
+     * LLM çağrı geçmişi.
+     *
+     * Önceden tablo yalnızca zaman/tip/süre gösteriyordu: 15 çağrı listeleniyor ama
+     * hiçbirinin HANGİ üretim isteğine ait olduğu görünmüyordu. Aynı anda iki üretim
+     * koştuğunda maliyet ayrıştırılamıyordu. Artık her satır isteğe ve faza bağlı;
+     * istek seçildiğinde o üretimin toplam maliyeti ayrıca gösterilir.
+     */
+    const LLM_PHASE_LABELS = {
+      GENERATION:        'Üretim',
+      VALIDATION_REPAIR: 'Doğrulama onarımı',
+      SELF_HEAL:         'Self-healing',
+      BENCHMARK:         'Kıyaslama',
+      RUNNER:            'Runner'
+    };
+
+    function llmFilterValue(id) {
+      const el = document.getElementById(id);
+      return el ? el.value : '';
+    }
+
     function loadLlmCalls() {
-      fetch('/api/v1/llm/calls')
+      const reqFilter   = llmFilterValue('llm-filter-request');
+      const phaseFilter = llmFilterValue('llm-filter-phase');
+      const url = reqFilter ? `/api/v1/llm/calls?requestId=${encodeURIComponent(reqFilter)}`
+                            : '/api/v1/llm/calls';
+
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           const tbody = document.getElementById('llm-calls-table-body');
-          if (data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 32px;">Model çağrı geçmişi bulunamadı.</td></tr>`;
+          llmSyncFilterOptions(data, reqFilter, phaseFilter);
+
+          const rows = phaseFilter ? data.filter(c => c.phase === phaseFilter) : data;
+          llmRenderCost(reqFilter, rows);
+
+          if (rows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 32px;">Bu filtreyle eşleşen çağrı yok.</td></tr>`;
             return;
           }
+
           tbody.innerHTML = '';
-          const sorted = [...data].reverse().slice(0, 15); // Show last 15 calls
-          sorted.forEach(c => {
+          [...rows].reverse().slice(0, 50).forEach(c => {
             const statusBadge = c.success
               ? '<span class="badge badge-success">Başarılı</span>'
               : '<span class="badge badge-danger">Hata</span>';
             const date = new Date(c.calledAt).toLocaleTimeString('tr-TR');
+
+            // Korelasyon yoksa uydurulmaz; açıkça "yok" yazılır.
+            const reqCell = c.requestId
+              ? `<a href="#" onclick="llmFilterByRequest('${c.requestId}');return false;"
+                    title="${c.requestId}" style="font-family:monospace;">${c.requestId.substring(0,8)}</a>`
+              : '<span style="color:var(--text-dim);" title="Bu çağrı bir üretim isteği bağlamı dışında yapıldı">—</span>';
+
+            const phaseCell = c.phase
+              ? `<span class="badge">${LLM_PHASE_LABELS[c.phase] || c.phase}</span>`
+              : '<span style="color:var(--text-dim);">—</span>';
+
             tbody.innerHTML += `
               <tr>
                 <td>${date}</td>
+                <td>${reqCell}</td>
+                <td>${phaseCell}</td>
                 <td><span class="badge badge-primary">${c.callType}</span></td>
                 <td>${statusBadge}</td>
                 <td>${c.durationMs} ms</td>
@@ -1716,6 +1784,62 @@
           });
         })
         .catch(err => console.error("LLM çağrı detayları yüklenemedi:", err));
+    }
+
+    function llmFilterByRequest(requestId) {
+      const sel = document.getElementById('llm-filter-request');
+      if (!sel) return;
+      if (![...sel.options].some(o => o.value === requestId)) {
+        sel.add(new Option(requestId.substring(0, 8) + '…', requestId));
+      }
+      sel.value = requestId;
+      loadLlmCalls();
+    }
+
+    /** Filtre listelerini gelen veriden türetir; seçili değer korunur. */
+    function llmSyncFilterOptions(data, reqFilter, phaseFilter) {
+      const reqSel = document.getElementById('llm-filter-request');
+      // İstek listesi yalnızca filtresiz çekimde tazelenir; filtreliyken liste daralmasın.
+      if (reqSel && !reqFilter) {
+        const ids = [...new Set(data.map(c => c.requestId).filter(Boolean))].reverse();
+        reqSel.innerHTML = '<option value="">Tümü</option>';
+        ids.forEach(id => reqSel.add(new Option(id.substring(0, 8) + '…', id)));
+        reqSel.value = '';
+      }
+      const phSel = document.getElementById('llm-filter-phase');
+      if (phSel) {
+        const phases = [...new Set(data.map(c => c.phase).filter(Boolean))];
+        phSel.innerHTML = '<option value="">Tümü</option>';
+        phases.forEach(p => phSel.add(new Option(LLM_PHASE_LABELS[p] || p, p)));
+        phSel.value = phases.includes(phaseFilter) ? phaseFilter : '';
+      }
+    }
+
+    /** Seçili isteğin ölçülen maliyeti — tahmin değil, kaydedilen değerlerin toplamı. */
+    function llmRenderCost(requestId, rows) {
+      const box = document.getElementById('llm-request-cost');
+      if (!box) return;
+      if (!requestId || rows.length === 0) {
+        box.style.display = 'none';
+        return;
+      }
+      const totalMs   = rows.reduce((s, c) => s + (c.durationMs || 0), 0);
+      const promptTok = rows.reduce((s, c) => s + (c.estimatedPromptTokens || 0), 0);
+      const respTok   = rows.reduce((s, c) => s + (c.estimatedResponseTokens || 0), 0);
+      const failed    = rows.filter(c => !c.success).length;
+      const byPhase   = rows.reduce((acc, c) => {
+        const k = LLM_PHASE_LABELS[c.phase] || c.phase || 'bilinmiyor';
+        acc[k] = (acc[k] || 0) + 1; return acc;
+      }, {});
+      const phaseText = Object.entries(byPhase).map(([k, v]) => `${k}: ${v}`).join(' · ');
+
+      box.style.display = '';
+      box.innerHTML =
+        `<b style="font-family:monospace;">${requestId}</b> &nbsp;—&nbsp; ` +
+        `<b>${rows.length}</b> çağrı${failed ? ` (<span style="color:#ef4444;">${failed} hata</span>)` : ''} · ` +
+        `toplam <b>${(totalMs / 1000).toFixed(1)} sn</b> · ` +
+        `~<b>${promptTok + respTok}</b> token (prompt ${promptTok} / yanıt ${respTok})` +
+        (phaseText ? `<br><span style="color:var(--text-dim);">${phaseText}</span>` : '');
     }
 
     // Modal Details Panel Controllers
@@ -2872,7 +2996,74 @@
       }, 2500);
     }
 
+    /**
+     * Gözlenen yanıtı ekrana basar.
+     *
+     * ÖLÇÜLEN ARIZA: gözlem başarısız olduğunda kullanıcı bunu HİÇ göremiyordu;
+     * ekranda yalnızca üretilen case'ler vardı ve testlerin neye dayandığı belirsizdi.
+     * Üretim ölçüme dayanmadığında bunun ekranda görünmesi şart.
+     */
+    function runnerRenderObservation(req) {
+      const box = document.getElementById('runner-observed-section');
+      if (!box) return;
+
+      if (req.observationSkipReason) {
+        box.style.display = '';
+        box.innerHTML = `
+          <div style="border:1px solid rgba(245,158,11,0.35); background:rgba(245,158,11,0.08);
+                      border-radius:8px; padding:12px 14px;">
+            <div style="font-weight:600; color:#f59e0b; margin-bottom:6px;">⚠️ Gözlem yapılamadı</div>
+            <div style="font-size:12.5px; color:var(--text-muted);">
+              ${req.observedRequestLine ? `<div style="font-family:monospace; margin-bottom:4px;">${req.observedRequestLine}</div>` : ''}
+              ${req.observationSkipReason}
+            </div>
+            <div style="font-size:12px; color:var(--text-dim); margin-top:8px;">
+              Üretim ölçülmüş veriye dayanmıyor. Yan etkili istekler için
+              <code>observeMutating=true</code> ile onay verin.
+            </div>
+          </div>`;
+        return;
+      }
+
+      if (req.observedStatus == null) {
+        box.style.display = 'none';
+        return;
+      }
+
+      const ok = req.observedStatus >= 200 && req.observedStatus < 300;
+      const body = (req.observedBody || '(boş)');
+      box.style.display = '';
+      box.innerHTML = `
+        <div style="border:1px solid rgba(16,185,129,0.3); background:rgba(16,185,129,0.06);
+                    border-radius:8px; padding:12px 14px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+            <span style="font-weight:600; color:#10b981;">Gözlenen yanıt</span>
+            <span class="badge ${ok ? 'badge-success' : 'badge-danger'}">${req.observedStatus}</span>
+            <span style="font-size:12px; color:var(--text-muted);">${req.observedDurationMs} ms (ölçüldü)</span>
+            <span style="font-family:monospace; font-size:12px; color:var(--text-muted);">${req.observedRequestLine || ''}</span>
+          </div>
+          <pre style="margin:0; max-height:260px; overflow:auto; background:rgba(0,0,0,0.25);
+                      padding:10px; border-radius:6px; font-size:11.5px; white-space:pre-wrap;
+                      word-break:break-word;">${escapeHtml(body)}</pre>
+          <div style="font-size:11.5px; color:var(--text-dim); margin-top:8px;">
+            Aşağıdaki testler bu yanıta göre üretildi. Gözlenmeyen alan, status ya da
+            süre eşiği içeren bir iddia görürsen bildirin.
+          </div>
+        </div>`;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
     async function runnerLoadResults(requestId) {
+      // Gözlem kanıtı — case'lerden ÖNCE gösterilir
+      try {
+        const res = await fetch('/api/v1/tests/' + requestId, { headers: { 'Accept': 'application/json' } });
+        runnerRenderObservation(await res.json());
+      } catch(e) {}
+
       // Test cases
       try {
         const res   = await fetch('/api/v1/tests/' + requestId + '/cases', { headers: { 'Accept': 'application/json' } });

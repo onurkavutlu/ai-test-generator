@@ -60,7 +60,9 @@ public class LlmReportStore {
                 entity.isSuccess(),
                 entity.getErrorMessage(),
                 null,
-                entity.getCalledAt());
+                entity.getCalledAt(),
+                entity.getRequestId(),
+                entity.getPhase());
     }
 
     public void record(LlmCallReport report) {
@@ -75,6 +77,9 @@ public class LlmReportStore {
         // Konsola anında görünür özet
         if (report.success()) {
             log.info("┌─ LLM CALL ────────────────────────────────────────");
+            log.info("│  İstek    : {} ({})",
+                    report.requestId() == null ? "(korelasyon yok)" : report.requestId(),
+                    report.phase() == null ? "-" : report.phase());
             log.info("│  Model    : {}", report.model());
             log.info("│  Tip      : {}", report.callType());
             log.info("│  Süre     : {} ms", report.durationMs());
@@ -104,6 +109,8 @@ public class LlmReportStore {
                     .success(report.success())
                     .errorMessage(report.errorMessage())
                     .calledAt(report.calledAt())
+                    .requestId(report.requestId())
+                    .phase(report.phase())
                     .build());
         } catch (Exception e) {
             log.warn("LLM çağrı kaydı DB'ye yazılamadı: {}", e.getMessage());
@@ -120,19 +127,40 @@ public class LlmReportStore {
                 .toList();
     }
 
-    public LlmCallSummary summary() {
-        long total   = reports.size();
-        long success = reports.stream().filter(LlmCallReport::success).count();
-        long totalMs = reports.stream().mapToLong(LlmCallReport::durationMs).sum();
-        long avgMs   = total > 0 ? totalMs / total : 0;
-        int  totalPromptTokens   = reports.stream().mapToInt(LlmCallReport::estimatedPromptTokens).sum();
-        int  totalResponseTokens = reports.stream().mapToInt(LlmCallReport::estimatedResponseTokens).sum();
+    /** Bir üretim isteğine ait tüm çağrılar — kronolojik. */
+    public List<LlmCallReport> byRequest(String requestId) {
+        if (requestId == null || requestId.isBlank()) return List.of();
+        return reports.stream()
+                .filter(r -> requestId.equals(r.requestId()))
+                .toList();
+    }
 
-        return new LlmCallSummary(total, success, total - success, avgMs,
+    public LlmCallSummary summary() {
+        return summarize(reports);
+    }
+
+    /**
+     * Tek bir isteğin maliyeti. Bir üretimin kaç çağrıya, kaç saniyeye ve kaç token'a
+     * mal olduğu ancak korelasyonla ölçülebilir; ekranda toplam görmek yetmez.
+     */
+    public LlmCallSummary summaryFor(String requestId) {
+        return summarize(byRequest(requestId));
+    }
+
+    private static LlmCallSummary summarize(List<LlmCallReport> source) {
+        long total   = source.size();
+        long success = source.stream().filter(LlmCallReport::success).count();
+        long totalMs = source.stream().mapToLong(LlmCallReport::durationMs).sum();
+        long avgMs   = total > 0 ? totalMs / total : 0;
+        int  totalPromptTokens   = source.stream().mapToInt(LlmCallReport::estimatedPromptTokens).sum();
+        int  totalResponseTokens = source.stream().mapToInt(LlmCallReport::estimatedResponseTokens).sum();
+
+        return new LlmCallSummary(total, success, total - success, avgMs, totalMs,
                 totalPromptTokens, totalResponseTokens);
     }
 
     public record LlmCallSummary(
             long totalCalls, long successCalls, long failedCalls,
-            long avgDurationMs, int totalPromptTokens, int totalResponseTokens) {}
+            long avgDurationMs, long totalDurationMs,
+            int totalPromptTokens, int totalResponseTokens) {}
 }

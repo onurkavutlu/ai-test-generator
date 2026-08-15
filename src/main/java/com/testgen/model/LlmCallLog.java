@@ -12,7 +12,9 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "llm_call_logs", indexes = {
         @Index(name = "idx_llm_call_type", columnList = "callType"),
-        @Index(name = "idx_llm_called_at", columnList = "calledAt")
+        @Index(name = "idx_llm_called_at", columnList = "calledAt"),
+        // Bir isteğin tüm çağrılarını ve toplam maliyetini çekmek için
+        @Index(name = "idx_llm_request_id", columnList = "requestId")
 })
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class LlmCallLog {
@@ -39,6 +41,17 @@ public class LlmCallLog {
 
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
+
+    /**
+     * Çağrının ait olduğu üretim isteği. Bilinmiyorsa null bırakılır — yanlış bir
+     * korelasyon, korelasyon olmamasından kötüdür.
+     */
+    @Column(length = 40)
+    private String requestId;
+
+    /** GENERATION | VALIDATION_REPAIR | SELF_HEAL | BENCHMARK | RUNNER */
+    @Column(length = 24)
+    private String phase;
 
     @Column(updatable = false)
     @Builder.Default

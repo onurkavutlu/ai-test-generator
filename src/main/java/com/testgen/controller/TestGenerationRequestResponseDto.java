@@ -26,7 +26,20 @@ public record TestGenerationRequestResponseDto(
         int totalFailureCount,
         boolean autoGenerateOnFailure,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        // ── Gözlem kanıtı: üretilen testlerin neye dayandığı ──
+        /** "POST https://host/path" — gözlemlenen isteğin özeti. */
+        String observedRequestLine,
+        /** Gerçekten dönen durum kodu; gözlem yapılmadıysa null. */
+        Integer observedStatus,
+        /** Gerçekten ölçülen süre (ms); SLA yalnızca bundan türetilebilir. */
+        Long observedDurationMs,
+        /** Yanıt gövdesi — ekranda olduğu gibi gösterilir. */
+        String observedBody,
+        /** Gözlem yapılamadıysa nedeni; yapıldıysa null. */
+        String observationSkipReason,
+        LocalDateTime observedAt
 ) {
     public static TestGenerationRequestResponseDto from(TestGenerationRequest request) {
         return new TestGenerationRequestResponseDto(
@@ -46,7 +59,13 @@ public record TestGenerationRequestResponseDto(
                 request.getTotalFailureCount(),
                 request.isAutoGenerateOnFailure(),
                 request.getCreatedAt(),
-                request.getUpdatedAt()
+                request.getUpdatedAt(),
+                request.getObservedRequestLine(),
+                request.getObservedStatus(),
+                request.getObservedDurationMs(),
+                request.getObservedBody(),
+                request.getObservationSkipReason(),
+                request.getObservedAt()
         );
     }
 }

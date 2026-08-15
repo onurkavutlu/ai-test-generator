@@ -86,6 +86,41 @@ public class TestGenerationRequest {
     private boolean autoGenerateOnFailure = false;
 
     /**
+     * Yan etkili bir isteğin (POST/PUT/DELETE/PATCH) gözlem aşamasında GERÇEKTEN
+     * gönderilmesine kullanıcı açıkça izin verdi mi?
+     *
+     * <p>Varsayılan {@code false}: araç, kullanıcının haberi olmadan hedef sisteme yan
+     * etkili istek atmaz. Ancak onay yoksa üretim de <b>ölçüme dayanmaz</b>; bu durumda
+     * tahminle test üretmek yerine üretim reddedilir.
+     */
+    @Builder.Default
+    private boolean observeMutating = false;
+
+    // ── Gözlem kanıtı ────────────────────────────────────────────────────────
+    // Üretilen her assertion'ın dayanağı. Saklanmazsa kullanıcı, testin neye göre
+    // yazıldığını göremez; "bu iddia nereden çıktı" sorusu cevapsız kalır.
+
+    /** "POST https://host/path" — gözlemlenen isteğin özeti. */
+    @Column(columnDefinition = "TEXT")
+    private String observedRequestLine;
+
+    /** Gerçekten dönen HTTP durum kodu. */
+    private Integer observedStatus;
+
+    /** Gerçekten ölçülen süre (ms). SLA yalnızca bu değerden türetilebilir. */
+    private Long observedDurationMs;
+
+    /** Yanıt gövdesi — kısaltılmamış hâliyle saklanır. */
+    @Column(columnDefinition = "TEXT")
+    private String observedBody;
+
+    /** Gözlem yapılamadıysa nedeni; yapıldıysa null. */
+    @Column(columnDefinition = "TEXT")
+    private String observationSkipReason;
+
+    private LocalDateTime observedAt;
+
+    /**
      * Çok-ajanlı analiz adımı bu istek için koşulsun mu?
      *
      * Dahili alan — public üretim API'sinde yer almaz; varsayılan açıktır. Yalnızca

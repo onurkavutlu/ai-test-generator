@@ -26,7 +26,8 @@ public class ObservationServiceTest {
 
     private final ObservationService service = new ObservationService(
             new com.testgen.runner.ResponseAssertionDeriver(new com.fasterxml.jackson.databind.ObjectMapper()),
-            testGuard());
+            testGuard(),
+            new com.testgen.parser.CurlParser());
 
     /** Testler localhost'a istek atıyor; guard'ın varsayılan (özel ağ serbest) hâli. */
     private static com.testgen.config.OutboundUrlGuard testGuard() {

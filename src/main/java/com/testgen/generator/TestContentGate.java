@@ -64,7 +64,17 @@ public class TestContentGate {
             log.warn("Üretim doğrulaması başarısız ({}. deneme) — {}: {}",
                     attempts, testCase.getTestName(), firstLine(result.error()));
 
-            String repaired = regenerate(testCase, result.error());
+            // Onarım çağrısı üretimin içinden yapılır: requestId korunur, yalnızca faz
+            // değişir. Böylece "hangi üretimde kaç kez doğrulama onarımı gerekti"
+            // çağrı geçmişinden ölçülebilir.
+            var previousScope = com.testgen.llm.LlmCallContext
+                    .enterPhase(com.testgen.llm.LlmCallContext.Phase.VALIDATION_REPAIR);
+            String repaired;
+            try {
+                repaired = regenerate(testCase, result.error());
+            } finally {
+                com.testgen.llm.LlmCallContext.restore(previousScope);
+            }
             if (repaired == null || repaired.isBlank()) {
                 break;
             }
