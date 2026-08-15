@@ -1,0 +1,95 @@
+# ═══════════════════════════════════════════════════════════════
+#  Alarm kurallari
+#
+#  ONEMLI: Alertmanager BAGLI DEGIL. Kurallar degerlendirilir ve
+#  Prometheus'un "Alerts" sekmesinde PENDING/FIRING olarak gorunur,
+#  ama hicbir yere bildirim GITMEZ (mail/Slack yok). Bildirim isteniyorsa
+#  ayrica Alertmanager kurulmalidir.
+#
+#  Esikler az ornekte yanlis alarm vermesin diye minimum sayim kosuluyla
+#  korunur — 2 case uretilip 1'i gecersiz oldugunda "kalite dustu"
+#  demek anlamsizdir.
+# ═══════════════════════════════════════════════════════════════
+
+groups:
+  - name: testgen-erisilebilirlik
+    rules:
+      - alert: UygulamaErisilemez
+        # Hem compose hem host hedefi dustuyse gercek bir kesinti vardir.
+        # Tek hedefin DOWN olmasi normaldir (bkz. prometheus.yml aciklamasi).
+        expr: max(up{job="ai-test-generator"}) == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Uygulama hicbir yoldan erisilemiyor"
+          description: "3 dakikadir ne compose ne de host hedefi cevap veriyor."
+
+  - name: testgen-uretim-kalitesi
+    rules:
+      - alert: UretimKalitesiDustu
+        # Uretim kapisindan gecemeyen case orani %30'u astiysa.
+        expr: |
+          (
+            sum(increase(testgen_generated_cases_total{validation_status="invalid"}[6h]))
+            /
+            sum(increase(testgen_generated_cases_total[6h]))
+          ) > 0.30
+          and
+          sum(increase(testgen_generated_cases_total[6h])) >= 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uretilen testlerin %30'undan fazlasi dogrulamadan gecemiyor"
+          description: "Son 6 saatte INVALID orani esigi asti. Model, prompt veya hedef API degismis olabilir."
+
+      - alert: SenaryoGecmeOraniDustu
+        # Dogrulamadan gecen ama kosumda duşen testler: sozdizimi degil, ANLAM hatasi.
+        expr: |
+          (
+            sum(increase(testgen_scenarios_total{outcome="failed"}[6h]))
+            /
+            sum(increase(testgen_scenarios_total[6h]))
+          ) > 0.50
+          and
+          sum(increase(testgen_scenarios_total[6h])) >= 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kosulan senaryolarin yarisindan fazlasi dusuyor"
+          description: "Testler parse ediliyor ama dogru sey iddia etmiyor olabilir (yanlis status kodu, olmayan fixture, tirnaksiz match)."
+
+  - name: testgen-llm
+    rules:
+      - alert: LlmCagrilariBasarisiz
+        expr: sum(increase(testgen_llm_calls_total{outcome="failure"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM cagrilarinda hata var"
+          description: "Son 15 dakikada basarisiz LLM cagrisi kaydedildi. Ollama kapali veya zaman asimi olabilir."
+
+  - name: testgen-kaynak
+    rules:
+      - alert: AsyncKuyrukBirikti
+        expr: max(executor_queued_tasks) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Async havuzunda is birikiyor"
+          description: "Uretim/kosum kuyrugu 10 dakikadir 10'un uzerinde. Havuz boyutu yetersiz olabilir."
+
+      - alert: HeapBaskisi
+        expr: |
+          sum(jvm_memory_used_bytes{area="heap"})
+          / sum(jvm_memory_max_bytes{area="heap"}) > 0.90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JVM heap kullanimi %90'in uzerinde"
+          description: "10 dakikadir heap dolu. Uretilen icerik bellekte tutuluyor olabilir."

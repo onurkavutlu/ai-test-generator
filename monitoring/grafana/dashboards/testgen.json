@@ -1,0 +1,729 @@
+{
+  "uid": "testgen-main",
+  "title": "AI Test Generator",
+  "tags": [
+    "testgen"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Üretim kalitesi (VALID oranı)",
+      "description": "Üretim kapısından geçen case oranı. 'Parse/derleme başarılı mı' sorusunu cevaplar — 'doğru şeyi assert ediyor mu' sorusunu DEĞİL.",
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "noValue": "üretim yok",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 60
+              },
+              {
+                "color": "green",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "100 * (sum(testgen_generated_cases_total{source=\"$source\", validation_status=\"valid\"}) or vector(0)) / sum(testgen_generated_cases_total{source=\"$source\"})"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Üretilen case",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 5,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum(testgen_generated_cases_total{source=\"$source\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Senaryo geçme oranı",
+      "description": "Senaryo granülaritesinde gerçek başarı. 10 senaryodan 5'i geçen case burada 5 geçiş sayılır.",
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 9,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "noValue": "koşum yok",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "100 * (sum(testgen_scenarios_total{source=\"$source\", outcome=\"passed\"}) or vector(0)) / sum(testgen_scenarios_total{source=\"$source\"})"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Case geçme oranı",
+      "description": "Case granülaritesi: TEK senaryo düşse case FAILED sayılır. Senaryo oranından her zaman daha katıdır — ikisinin farkı 'kısmi geçen case' sayısını gösterir.",
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 14,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "noValue": "koşum yok",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "100 * (sum(testgen_test_runs_total{source=\"$source\", run_status=\"passed\"}) or vector(0)) / sum(testgen_test_runs_total{source=\"$source\"})"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Toplam LLM süresi",
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 19,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum(testgen_llm_call_duration_seconds_sum{source=\"$source\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Üretim doğrulaması — framework / durum",
+      "description": "Üretim kapısının sonucu. INVALID artıyorsa model, prompt veya hedef API değişmiş olabilir.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum by (framework, validation_status) (testgen_generated_cases_total{source=\"$source\"})",
+          "legendFormat": "{{framework}} / {{validation_status}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM çağrı süresi — tip bazında (kümülatif)",
+      "description": "Ajan katmanının maliyeti burada görünür: AGENT_* serileri toplam sürenin ne kadarını yiyor?",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum by (call_type) (testgen_llm_call_duration_seconds_sum{source=\"$source\"})",
+          "legendFormat": "{{call_type}}"
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "LLM prompt karakteri — tip bazında",
+      "description": "Bağlam şişmesi (prompt snowball) buradan izlenir. Ajanlar mı pahalı, üretim promptu mu?",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum by (call_type) (testgen_llm_prompt_chars_total{source=\"$source\"})",
+          "legendFormat": "{{call_type}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Ortalama LLM çağrı süresi",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum by (call_type) (testgen_llm_call_duration_seconds_sum{source=\"$source\"}) / clamp_min(sum by (call_type) (testgen_llm_call_duration_seconds_count{source=\"$source\"}), 1)",
+          "legendFormat": "{{call_type}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Senaryo sonuçları",
+      "description": "Senaryo granülaritesi. 'Case koşum sonuçları' paneliyle birlikte okunur: aradaki fark kısmi geçen case'lerdir.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum by (framework, outcome) (testgen_scenarios_total{source=\"$source\"})",
+          "legendFormat": "{{framework}} / {{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Case koşum sonuçları",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 21
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum by (framework, run_status) (testgen_test_runs_total{source=\"$source\"})",
+          "legendFormat": "{{framework}} / {{run_status}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Ortalama üretim süresi (istek başına)",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 21
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum by (framework) (testgen_generation_duration_seconds_sum{source=\"$source\"}) / clamp_min(sum by (framework) (testgen_generation_duration_seconds_count{source=\"$source\"}), 1)",
+          "legendFormat": "{{framework}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Async kuyruk & aktif iş",
+      "description": "Üretim/koşum @Async havuzunda birikiyorsa kuyruk yükselir.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 21
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "executor_queued_tasks{source=\"$source\"}",
+          "legendFormat": "kuyruk {{name}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "executor_active_threads{source=\"$source\"}",
+          "legendFormat": "aktif {{name}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "JVM heap kullanımı",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 28
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum(jvm_memory_used_bytes{source=\"$source\", area=\"heap\"}) / sum(jvm_memory_max_bytes{source=\"$source\", area=\"heap\"})",
+          "legendFormat": "heap"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP istek hızı — uç nokta bazında",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 28
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum by (uri, method) (rate(http_server_requests_seconds_count{source=\"$source\"}[5m])) > 0",
+          "legendFormat": "{{method}} {{uri}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP hata hızı (4xx / 5xx)",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 28
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "testgen-prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "testgen-prom"
+          },
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{source=\"$source\", status=~\"4..|5..\"}[5m])) > 0",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "source",
+        "label": "Kaynak",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "testgen-prom"
+        },
+        "query": {
+          "query": "label_values(up{job=\"ai-test-generator\"}, source)",
+          "refId": "src"
+        },
+        "definition": "label_values(up{job=\"ai-test-generator\"}, source)",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "sort": 1,
+        "current": {}
+      }
+    ]
+  }
+}

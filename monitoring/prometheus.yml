@@ -1,0 +1,43 @@
+# ═══════════════════════════════════════════════════════════════
+#  Prometheus scrape yapilandirmasi
+#
+#  Uygulama iki sekilde kosabilir; ikisi de ayni is (job) altinda
+#  hedeflenir ve `source` etiketiyle ayrilir:
+#    - source="compose" → uygulama `docker compose up` ile konteynerde
+#    - source="host"    → uygulama IDE/mvnw ile makinede (8080)
+#
+#  BEKLENEN DAVRANIS: Status → Targets ekraninda hedeflerden biri DOWN
+#  gorunebilir. Bu bir ariza degildir — uygulamayi o an nasil
+#  kosturdugunuza baglidir. "Uygulama erisilemez" alarmi
+#  (bkz. rules/alerts.yml) yalnizca IKISI BIRDEN dustugunde calisir.
+#
+#  DIKKAT: Ikisi AYNI ANDA ayakta olabilir (compose'daki uygulama +
+#  IDE'den kosan uygulama). Bunlar AYRI JVM'lerdir; sayaclari toplamak
+#  cift sayima yol acar. Bu yuzden Grafana dashboard'unda `source`
+#  degiskeni vardir ve TUM sorgular source="$source" ile filtrelenir.
+#  Elle PromQL yazarken ayni filtreyi siz de eklemelisiniz.
+# ═══════════════════════════════════════════════════════════════
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    application: ai-test-generator
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: ai-test-generator
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['app:8080']
+        labels:
+          source: compose
+      - targets: ['host.docker.internal:8080']
+        labels:
+          source: host
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
