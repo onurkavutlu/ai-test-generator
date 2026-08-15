@@ -1,118 +1,432 @@
+<div align="center">
+
 # AI Test Generator
 
-**Büyük Dil Modelleri (LLM) ve Multi-Agent (Çoklu Ajan) mimarisi kullanan otonom yazılım test üretim laboratuvarı.**  
-Karate DSL · Selenium · Appium · ISTQB Standartları · Self-Healing · Dark Dashboard
+**API sözleşmenizden ISTQB standartlarında, çalıştırılabilir test paketi.**
+
+Swagger · Postman · HAR · GraphQL · WSDL → Karate DSL · REST Assured · Selenium
+
+[![Java](https://img.shields.io/badge/Java-17-orange)](#teknoloji-yığını)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.4-6DB33F)](#teknoloji-yığını)
+[![Kapsam kapısı](https://img.shields.io/badge/kapsam%20kapısı-satır%20%E2%89%A5%2072%25%20·%20dal%20%E2%89%A5%2058%25-blue)](#kalite-kapıları)
+[![Testler](https://img.shields.io/badge/testler-539-brightgreen)](#kalite-kapıları)
+
+[English README](README_EN.md)
+
+</div>
+
+![Dashboard](docs/ekran-goruntuleri/01-dashboard.png)
 
 ---
 
-## Projenin Amacı ve Temel Yetenekleri
+## Hangi problemi çözer
 
-Bu proje, geleneksel manuel test yazımını otomatize etmekle kalmaz; yazılım geliştirme yaşam döngüsündeki farklı rolleri (İş Analisti, Test Mühendisi, Güvenlik Uzmanı vb.) simüle eden **8 farklı yapay zeka ajanı** kullanarak uçtan uca, uluslararası **ISTQB standartlarında** testler üretir.
+**Test tasarımı kişiye bağlıdır.** Aynı endpoint'i iki mühendis farklı kapsamda test eder; negatif ve
+sınır senaryolar çoğu zaman ilk elenenlerdir. Platform senaryoları ISTQB test tasarım tekniklerine
+göre türetir ve her senaryoyu `[KATEGORİ][ÖNCELİK][TEKNİK]` etiketiyle işaretler — hangi senaryonun
+hangi gerekçeyle var olduğu izlenebilir.
 
-### Öne Çıkan Özellikler
+**Üretilen test, koşmadan güvenilmez.** Üretim çıktısı veritabanına yazılmadan önce makineyle
+doğrulanır: Karate feature'ı ayrıştırılır, Java kodu derlenir. Geçemeyen içerik `INVALID` olarak
+gerekçesiyle işaretlenir; hata koşum sırasında değil üretim sırasında görünür olur.
 
-1. **Multi-Agent Mimari (8 Ajanlı Yapı):** 
-   Sistem, tek bir prompt yerine birbirini besleyen 8 farklı uzman yapay zeka ajanından oluşur.
-2. **ISTQB Standartları Entegrasyonu:** 
-   Oluşturulan testler basit "Happy Path" testleri değildir. Sistem Sınır Değer Analizi (BVA), Denklik Sınıfları (EP) ve Hata Tahminleme (Error Guessing) gibi mühendislik yaklaşımlarını kullanarak negatif ve uç durum senaryoları tasarlar.
-3. **Anlık Oto-Onarım (Self-Healing):** 
-   API kontratlarındaki değişiklikler veya anlık hatalar nedeniyle bir test patladığında (`FAILED`), sistem durmaz. Hata logunu (stacktrace) okuyarak LLM'e geri gönderir, hatayı tespit edip kodu otomatik düzeltir ve (`_Fixed_v1` olarak) tekrar çalıştırır.
-4. **Karanlık (Dark Glassmorphism) Dashboard:** 
-   Sistemi komut satırından kullanmak yerine modern bir arayüzden yönetebilirsiniz. Swagger URL ve User Story girerek anında test tetikleyebilir, ajanların analiz detaylarını rapor sekmesinden inceleyebilirsiniz.
+**Testler sözleşme değişince çürür.** Başarısız test, hata çıktısıyla birlikte dil modeline geri
+verilerek onarılabilir; onarılmış sürüm özgün case'in yerini alır.
 
-### Multi-Agent Mimarisi (Ajan Rolleri)
-
-Sistemdeki 8 farklı LLM ajanı, yazılım döngüsünü taklit ederek sıralı bir şekilde çalışır:
-* **Product Manager:** Gereksinimleri analiz edip iş risklerini ve kabul kriterlerini çıkarır.
-* **Developer:** Swagger/API dokümanını teknik açıdan inceler ve veri/kısıtlama kurallarını belirler.
-* **Test Analyst:** ISTQB kurallarına uygun pozitif ve negatif (BVA, EP) test stratejisi oluşturur.
-* **Test Automation:** Analizleri çalıştırılabilir test kodlarına (Örn: Karate DSL) dönüştürür.
-* **Performance:** SLA metriklerini belirleyip yük/performans testi gereksinimlerini raporlar.
-* **DevOps:** Testlerin CI/CD (Jenkins vb.) ve Allure raporlama süreçlerine entegrasyon planını tasarlar. Ayrıca OCP (OpenShift) uyumluluğunu sağlar.
-* **SecOps:** OWASP güvenlik zafiyetleri (SQL Injection, XSS, 401/403) için koruma kuralları uygular.
-* **Report:** Tüm verileri konsolide ederek nihai test kapsam oranlarını ve yönetici özetini çıkarır.
+**Üretilmiş içerik doğrulanabilir olmalıdır.** Hedefe erişilebiliyorsa testler tahmine değil ölçülen
+yanıta dayanır. Erişilemiyorsa sistem varsayılan bir status veya adres üretmez — üretimi durdurur ve
+nedenini bildirir. Bu davranış `NoFabricatedContentTest` ile derlemeye bağlıdır.
 
 ---
 
-## Kullanılan LLM Modeli
+## Hızlı başlangıç
 
-Projede varsayılan olarak **`llama3.1`** modeli kullanılmaktadır. Açık kaynak olan bu model Tool Calling (Ajan yetenekleri) özelliğini destekler. Altyapı istenirse Ollama üzerinden farklı yerel modellere de kolayca adapte edilebilecek şekilde geliştirilmiştir.
-
----
-
-## Hızlı Başlangıç
-
-### Önkoşullar
-Yeni bir makinede yalnızca şunlar gerekir:
-
-| Gereksinim | Zorunlu mu? | Not |
-|------------|-------------|-----|
-| **Docker Desktop** | Evet | Uygulama, PostgreSQL, Selenium Grid, MailHog ve Allure buradan ayağa kalkar |
-| **Git** | Evet | Repoyu klonlamak için |
-| **Ollama** | Evet (LLM üretimi için) | `setup.sh` kurulu değilse otomatik kurar |
-| Java / Maven | Hayır | Build Docker içinde yapılır; lokal geliştirme için `./mvnw` yeterli (Maven kurulumu gerekmez) |
-
-### Kurulum (tek seferde)
+Önkoşul: Docker Desktop ve Git. Ollama kurulu değilse `setup.sh` kurar.
 
 ```bash
 git clone https://github.com/onurkavutlu/ai-test-generator.git
-cd ai-test-generator
-cp .env.example .env
+cd ai-test-generator && cp .env.example .env
 chmod +x setup.sh && ./setup.sh
 ```
 
-`setup.sh`; Docker'ı doğrular, eksikse Ollama'yı kurup modeli indirir ve tüm servisleri (uygulama, PostgreSQL, MailHog, Allure, Selenium Grid) tek komutla ayağa kaldırır.
+Uygulama, PostgreSQL, MailHog, Allure, Selenium Grid, Prometheus, Grafana ve pgAdmin ayağa kalkar.
+Dashboard: **http://localhost:8080**
 
-Scripti kullanmadan doğrudan başlatmak isterseniz:
+Üretimi komut satırından tetiklemek için:
 
 ```bash
-cp .env.example .env
-docker compose up -d --build
+./trigger-generation.sh --swagger <openapi-url> --framework KARATE --run
 ```
 
-> **LLM notu:** Varsayılan model `llama3.1`. Çoklu ajan orkestrasyonu (Supervisor) **tool calling** desteği gerektirdiği için bu özelliği desteklemeyen küçük modeller seçilirse sistem sıralı fallback moduna düşer. Modeli `.env` içindeki `OLLAMA_MODEL` ile değiştirebilirsiniz.
+Betik hedef sözleşmeye erişilebildiğini doğrulamadan üretimi başlatmaz; erişilemiyorsa nedenini
+bildirip durur.
 
-### Manuel Geliştirme Ortamı (Docker Olmadan)
-Eğer Docker kullanmak istemiyorsanız ve sadece in-memory (H2) veritabanıyla projeyi test etmek isterseniz (Java 17+ gerektirir):
+<details>
+<summary><b>Docker kullanmadan yerel kurulum</b></summary>
+
+Yalnızca uygulama çalışır; veri dosya tabanlı H2'de (`java.io.tmpdir` altında) tutulur.
+Java 17+ gerekir, Maven gerekmez.
+
 ```bash
-./mvnw clean install -DskipTests
-./mvnw spring-boot:run -Dspring.profiles.active=local
+chmod +x kurulum.sh && ./kurulum.sh     # yokla, kur, başlat
+./kurulum.sh --check                    # yalnızca ortamı yokla
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+</details>
+
+---
+
+## Üretilen test neye benzer
+
+```gherkin
+Feature: User Authentication API
+
+  Background:
+    * url baseUrl
+    * configure connectTimeout = 10000
+    * def validUser   = { username: 'testuser@example.com', password: 'Test@123' }
+    * def invalidUser = { username: 'wrong@example.com',    password: 'WrongPass' }
+
+  Scenario: POST /auth/login - Geçerli kimlik bilgileriyle başarılı giriş
+    Given path '/auth/login'
+    And request validUser
+    When method POST
+    Then status 200
+    And match response.token == '#notnull'
+    And match response.expiresIn == '#number'
+    And match response.user.email == validUser.username
+
+  Scenario: POST /auth/login - Hatalı şifreyle 401 dönmeli
+    Given path '/auth/login'
+    And request invalidUser
+    When method POST
+    Then status 401
+    And match response.error == '#notnull'
 ```
 
-### Uygulama Arayüzüne Erişim
-Sistem ayağa kalktıktan sonra tarayıcınızdan aşağıdaki linke giderek sistemi kullanmaya başlayabilirsiniz:
-**Erişim Adresi:** http://localhost:8080
+Tam örnekler: [`docs/example-generated-test.feature`](docs/example-generated-test.feature) ·
+[`docs/example-selenium-generated.java`](docs/example-selenium-generated.java)
 
 ---
 
-## API ve Entegrasyonlar
+## Nasıl çalışır
 
-Arayüz (Dashboard) arkasında çalışan güçlü REST API sayesinde sistemi kendi CI/CD pipeline'larınıza da entegre edebilirsiniz:
+### Sistem mimarisi
 
-| Endpoint | HTTP | Açıklama |
-|----------|------|----------|
-| `/api/v1/tests/generate` | POST | Yeni bir test üretim isteği başlatır |
-| `/api/v1/tests/{id}/run-all` | POST | Üretilen testleri derler ve koşar |
-| `/api/v1/tests/{id}/llm-report`| GET | Her bir ajanın çıkardığı detaylı analizleri döndürür |
+```mermaid
+flowchart TB
+    subgraph Arayuz["Sunum"]
+        DASH["Dashboard"]
+        CMP["Comparer"]
+        SWG["Swagger UI"]
+    end
+
+    subgraph API["REST API"]
+        GEN_API["/api/v1/tests"]
+        SUITE_API["/suites · /plans"]
+        RUN_API["/runner · /executions"]
+    end
+
+    subgraph Uretim["Üretim"]
+        OBS["ObservationService"]
+        LEARN["AgentLearningService"]
+        ORCH["AiAgentOrchestrator"]
+        GENS["Karate · REST Assured<br/>Selenium üreticileri"]
+        GATE["TestContentGate"]
+        CLS["TestCaseClassifier"]
+    end
+
+    subgraph Kosum["Koşum"]
+        RUNNER["TestRunnerService"]
+        KRUN["KarateRunner"]
+        JPROJ["Java test projesi"]
+        REPORT["ReportOrchestrator"]
+        HEAL["FailureAnalysisService"]
+    end
+
+    subgraph Altyapi["Altyapı"]
+        GUARD["OutboundUrlGuard"]
+        LLM["Ollama / OpenAI"]
+        DB[("H2 · PostgreSQL")]
+        MAIL["E-posta"]
+    end
+
+    Arayuz --> API
+    GEN_API --> OBS --> LEARN --> ORCH --> GENS --> GATE --> CLS --> DB
+    SUITE_API --> RUNNER
+    RUN_API --> RUNNER
+    RUNNER --> KRUN & JPROJ
+    RUNNER --> REPORT --> MAIL
+    RUNNER --> HEAL --> GENS
+    ORCH & GENS & GATE & HEAL --> LLM
+    OBS & KRUN & CMP --> GUARD --> HEDEF["Hedef API / uygulama"]
+```
+
+### Üretim akışı
+
+Aşağıdaki sıra `TestGenerationService.generateTests` gövdesindeki gerçek çağrı sırasıdır.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor K as Kullanıcı
+    participant C as Controller
+    participant S as TestGenerationService
+    participant O as ObservationService
+    participant L as AgentLearningService
+    participant A as AiAgentOrchestrator
+    participant G as Üretici
+    participant T as TestContentGate
+    participant D as Veritabanı
+
+    K->>C: POST /api/v1/tests/generate
+    C->>S: generateTests(requestId)
+    C-->>K: 202 · requestId
+    S->>D: durum = GENERATING
+
+    S->>O: enrichWithObservations()
+    O->>O: hedefe gerçek istek (OutboundUrlGuard)
+    alt Hedefe erişildi
+        O-->>S: OBSERVED — ölçülen status ve gövde
+    else Erişilemedi
+        O-->>S: OBSERVED NOTE — "status/alan uydurmayın"
+    end
+
+    S->>L: enrichWithLearnings()
+    L-->>S: geçmiş koşumlardan bilinen tuzaklar
+
+    opt agentsEnabled
+        S->>A: enrichAdditionalContext()
+        A->>A: Supervisor, AgentRouting'in seçtiği ajanları çağırır
+        A-->>S: birleşik analiz
+    end
+
+    S->>G: generate(request)
+    G-->>S: aday case'ler
+
+    loop her case
+        S->>T: apply(case)
+        T->>T: Karate parse / Java derleme
+        alt Doğrulama başarısız
+            T->>T: hatayı modele geri ver, yeniden üret ve doğrula
+        end
+        T-->>S: VALID | INVALID (gerekçeli)
+    end
+
+    S->>S: sınıflandır (kategori · seviye · teknik)
+    S->>D: case'leri kaydet, durum = GENERATED
+```
+
+### Koşum ve onarım akışı
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant TR as Tetikleyici<br/>kullanıcı · suite · plan · zamanlayıcı
+    participant R as TestRunnerService
+    participant KR as KarateRunner
+    participant E as TestExecutionService
+    participant RP as ReportOrchestrator
+    participant F as FailureAnalysisService
+
+    TR->>R: koşum isteği
+    R->>E: execution aç (PLAN · SUITE · RERUN · SCHEDULER)
+    R->>R: supersede edilmiş case'leri hariç tut
+
+    loop her case
+        R->>KR: run(case)
+        KR->>KR: feature'ı izole dizine yaz, Karate ile koş
+        KR-->>R: toplam · geçen · başarısız · süre
+        R->>E: sonucu kaydet
+    end
+
+    R->>E: execution kapat
+    R->>RP: generateAndSend()
+    RP->>RP: Allure sonuçları + HTML, Cucumber raporu
+    RP-->>TR: e-posta bildirimi
+
+    alt autoGenerateOnFailure = true
+        R->>F: başarısız case'leri analiz et
+        F-->>R: kod + stacktrace ile onarılmış sürüm
+        R->>KR: onarılmış case'i koş, özgününü supersede et
+    else varsayılan (false)
+        R-->>TR: onarım için POST /api/v1/tests/{id}/self-heal
+    end
+```
+
+**Self-healing varsayılan olarak otomatik değildir.** `autoGenerateOnFailure` varsayılanı `false`;
+onarım `POST /api/v1/tests/{id}/self-heal` ile başlatılır. Bir case en fazla `max-heal-attempts`
+(varsayılan 3) kez onarılır, tek turda en fazla `MAX_HEAL_BATCH` (varsayılan 10) case işlenir.
+
+### Test varlıkları
+
+```mermaid
+erDiagram
+    TestGenerationRequest ||--o{ GeneratedTestCase : üretir
+    TestSuite }o--o{ GeneratedTestCase : içerir
+    TestPlan }o--o{ TestSuite : kapsar
+    TestExecution ||--o{ TestExecutionResult : kaydeder
+```
+
+Case'ler test paketlerinde, paketler test planlarında toplanır. Her koşum bir `TestExecution` kaydı
+oluşturur ve tetikleyicisi saklanır. Zamanlanmış koşum `scheduler.daily-run.cron` ifadesine göre
+çalışır (varsayılan: her gün 02:00).
+
+### Ajan yönlendirme
+
+Sekiz ajan rolü tanımlıdır; bir istekte hepsi koşmaz. Koşacak ajanlar `AgentRouting` tarafından test
+tipine ve moda göre seçilir.
+
+| Ajan | Sorumluluk | LEAN (varsayılan) | FULL |
+|---|---|:---:|:---:|
+| Product Manager | İş riski, kabul kriterleri | hikâye varsa | ✓ |
+| Developer | Teknik inceleme, veri ve kısıt kuralları | API testinde | ✓ |
+| Test Analyst | ISTQB test stratejisi | ✓ | ✓ |
+| Test Automation | Çalıştırılabilir koda dönüştürme | ✓ | ✓ |
+| SecOps | Güvenlik senaryosu kuralları | API testinde | ✓ |
+| Performance | SLA ve yük gereksinimleri | — | ✓ |
+| Report | Konsolidasyon, yönetici özeti | — | ✓ |
+
+Mod `AGENT_MODE` ile belirlenir. Supervisor rolleri tool calling ile çağırır; model bunu
+desteklemiyorsa sıralı yedek akışa geçilir — bu durumda da hazır metin üretilmez, cevap alınamayan
+ajanın analizi boş kalır.
 
 ---
 
-## Self-Healing Akışı Nasıl Çalışır?
+## CI/CD entegrasyonu
 
-Kullanıcı arayüzünden veya Zamanlayıcıdan (Scheduler) tetiklenen testler, koşum sonrası `TestRunnerService` tarafından kontrol edilir. 
-Eğer başarısız (FAILED) bir test bulunursa:
-1. `FailureAnalysisService` hatayı analiz eder.
-2. Orijinal kod ve hata çıktısı (stacktrace) bir araya getirilerek düzeltilmiş test senaryosu üretilir.
-3. Yeni senaryo anında koşulur ve sonuçları nihai rapora eklenir.
+`jenkins/Jenkinsfile` uçtan uca bir hat tanımlar; test üretimi hattın bir aşamasıdır:
+
+```
+Checkout → Secret Scan (Trivy) → Build & Unit Tests (mvn verify)
+        → Dependency Scan (OWASP) → SonarQube → Docker Build
+        → Container Scan → OCP Registry → Deploy to Dev
+        → Smoke Tests → Regression → AI Test Generation → AI Testlerini Koş
+```
+
+`AI Test Generation` aşaması, dağıtılmış uygulamanın kendi `/v3/api-docs` çıktısını kullanarak
+`POST /api/v1/tests/generate` çağırır; üretilen Karate ve Selenium testleri sonraki aşamada koşulur.
+Kubernetes/OpenShift bildirimleri `k8s/` altındadır.
 
 ---
 
-## Dağıtım ve CI/CD (OCP & Jenkins)
+## Güvenlik
 
-Sistem kurumsal mimarilere uygun olarak tam uyumlu bir şekilde **OCP (OpenShift Container Platform)** ortamında çalışacak şekilde tasarlanmıştır. Ayrıca **Jenkins** pipeline'ları ile entegre çalışarak mevcut CI/CD süreçlerinize doğrudan dahil edilebilir ve her build sonrası otomatik test süreçlerini tetikleyebilir.
+Platform, kullanıcı tarafından verilen adreslere istek gönderdiği için doğası gereği SSRF yüzeyi
+taşır. Dışarıya çıkan tüm istekler `OutboundUrlGuard` üzerinden geçer:
+
+- Bulut metadata uçları her koşulda reddedilir.
+- DNS rebinding'e karşı, ana makine adının çözümlenen tüm adresleri denetlenir.
+- Yönlendirmeler otomatik izlenmez; her adım yeniden denetlenerek takip edilir.
+- Loopback ve özel ağlara varsayılan olarak izin verilir; iç servis testi birincil kullanım
+  senaryosudur. Çok kiracılı dağıtımlarda
+  `test-generator.security.allow-private-networks: false` ile kapatılır.
+
+![SSRF reddi](docs/ekran-goruntuleri/04-runner-ssrf-reddi.png)
 
 ---
 
-## Geliştirme Ortamı
+## Kalite kapıları
 
-Spring Boot altyapısıyla geliştirilen projede, varsayılan olarak in-memory (H2) veritabanı kullanılır. Herhangi bir ekstra veritabanı kurulumuna ihtiyaç duymadan `local` profiliyle hemen çalıştırıp test edebilirsiniz.
+`./mvnw verify` aşağıdaki kapıların tamamını koşar; biri karşılanmazsa derleme başarısız olur.
+
+| Kapı | Eşik | Son ölçüm |
+|---|---|---|
+| Testler | 0 hata | 539 test — 527 koştu ve geçti, 12 atlandı |
+| Satır kapsamı | ≥ %72 | %75.2 |
+| Dal kapsamı | ≥ %58 | %60.9 |
+| Sahte içerik denetimi | — | `NoFabricatedContentTest` |
+
+Atlanan senaryolar, hedef API'ye erişilemeyen ortamlarda kendini atlayan uçtan uca testlerdir; ağ
+erişimi bulunan ortamlarda koşarlar. Güncel ölçüm: `./mvnw verify` sonrası
+`target/site/jacoco/index.html`.
+
+---
+
+## Teknoloji yığını
+
+| Katman | Teknoloji | Sürüm |
+|---|---|---|
+| Çalışma zamanı | Java · Spring Boot | 17 · 3.5.4 |
+| LLM altyapısı | LangChain4j | 0.34.0 |
+| Model sağlayıcı | Ollama (`llama3.1`) · OpenAI | — |
+| API test üretimi | Karate DSL · REST Assured | 1.5.2 · 5.4.0 |
+| Web test üretimi | Selenium WebDriver | 4.18.1 |
+| Senaryo ve raporlama | Cucumber · Allure | 7.15.0 · 2.24.0 |
+| Veri | H2 · PostgreSQL · Spring Data JPA | — |
+| Kalite | JUnit 5 · Mockito · JaCoCo | 0.8.11 |
+| İzleme | Micrometer · Prometheus · Grafana | — |
+| Dağıtım | Docker · Kubernetes / OpenShift · Jenkins | — |
+
+LangChain4j 0.34.0'a sabitlenmiştir: Ollama üzerinden tool calling bu sürümde beklendiği gibi
+çalışmakta olup Supervisor orkestrasyonu bu yeteneğe bağlıdır.
+
+<details>
+<summary><b>Proje kırılımı</b></summary>
+
+```
+src/main/java/com/testgen/
+├── agent/        16  Ajan rolleri, Supervisor, AgentRouting, ajan araçları
+├── comparer/      9  Endpoint Comparer — JSON diff, yanıt farkı ajanı
+├── config/        5  OutboundUrlGuard, LLM yapılandırması, Swagger, hata yönetimi
+├── controller/   14  REST uçları
+├── generator/    11  Üreticiler, TestContentGate, doğrulayıcı, sınıflandırıcı
+├── llm/           7  Ollama ve OpenAI servisleri, çağrı geçmişi, prompt şablonları
+├── metrics/       1  Micrometer metrikleri
+├── model/        26  Alan modeli ve enum'lar
+├── notification/  2  E-posta bildirimi
+├── parser/        6  Swagger · Postman · HAR · GraphQL · SOAP ayrıştırıcıları
+├── report/        6  Cucumber ve Allure rapor üretimi
+├── repository/   12  JPA repository'leri
+├── runner/        9  Derleme, koşum, iddia derleyici, direkt istek servisi
+├── scheduler/     3  Zamanlanmış koşum ve hata analizi
+└── service/      11  Orkestrasyon, üretim, gözlem, plan ve paket servisleri
+```
+</details>
+
+<details>
+<summary><b>Yapılandırma ve API uçları</b></summary>
+
+| Değişken | Varsayılan | Açıklama |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` | `ollama` veya `openai` |
+| `OLLAMA_MODEL` | `llama3.1` | Tool calling destekleyen model önerilir |
+| `OPENAI_API_KEY` | — | `LLM_PROVIDER=openai` için zorunlu |
+| `AGENT_MODE` | `LEAN` | Ajan yönlendirme modu (`LEAN` · `FULL`) |
+| `MAX_HEAL_BATCH` | `10` | Tek onarım turunda işlenecek azami case sayısı |
+| `EMAIL_RECIPIENTS` | — | Koşum sonrası bildirim alıcıları |
+
+Tam API referansı Swagger UI üzerindedir: `http://localhost:8080/swagger-ui/index.html`
+
+| Uç | HTTP | Açıklama |
+|---|---|---|
+| `/api/v1/tests/generate` | POST | Üretim başlatır (asenkron) |
+| `/api/v1/tests/{id}` | GET | `PENDING` · `GENERATING` · `GENERATED` · `FAILED` |
+| `/api/v1/tests/{id}/cases` | GET · POST | Case listesi; POST ile elle yazılmış case eklenir |
+| `/api/v1/tests/{id}/run-all` | POST | Derler ve koşar |
+| `/api/v1/tests/{id}/self-heal` | POST | Onarım turu başlatır |
+| `/api/v1/tests/{id}/llm-report` | GET | Ajan analizleri |
+| `/api/v1/suites` · `/api/v1/plans` | GET · POST | Paketler ve planlar |
+| `/api/v1/executions` | GET | Koşum geçmişi |
+| `/api/v1/runner/execute` | POST | Tek isteği canlı koşar |
+| `/api/v1/comparison/run` | POST | İki ortamı karşılaştırır |
+| `/api/v1/llm/summary` | GET | LLM çağrı istatistikleri |
+
+Arayüzler: `:8080` dashboard · `:8080/comparer` comparer · `:8025` MailHog · `:8888` Allure ·
+`:4444` Selenium Grid · `:9090` Prometheus · `:3000` Grafana · `:5050` pgAdmin
+</details>
+
+---
+
+## Belgeler
+
+- [Üretilmiş Karate örneği](docs/example-generated-test.feature)
+- [Üretilmiş Selenium örneği](docs/example-selenium-generated.java)
+- [IntelliJ'de Karate testi koşma](docs/intellij-karate-run.md)
+- Ekran görüntüleri: [`docs/ekran-goruntuleri/`](docs/ekran-goruntuleri/)
+
+## Katkı
+
+Commit mesajları [Conventional Commits](https://www.conventionalcommits.org/) biçimindedir. Davranış
+değişiklikleri test ile birlikte gönderilir; kapsam kapısı karşılanmadığında derleme başarısız olur.
+Ölçülemeyen bir değeri üreten katkılar kabul edilmez.
