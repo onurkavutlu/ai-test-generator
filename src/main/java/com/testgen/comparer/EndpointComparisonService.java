@@ -47,6 +47,10 @@ public class EndpointComparisonService {
     private final ObjectMapper objectMapper;
     private final ApiCollectionParser apiCollectionParser;
     private final ComparisonRunRepository comparisonRunRepository;
+    private final ResponseDiffAgent responseDiffAgent;
+
+    /** SSRF kapısı: karşılaştırma da sunucunun kendi ağından istek atar (bkz. Runner). */
+    private final com.testgen.config.OutboundUrlGuard urlGuard;
 
     public ComparisonResultDto compare(ComparisonRequestDto dto) {
         validateBaseUrl(dto.baseUrlA(), "baseUrlA");
@@ -93,6 +97,14 @@ public class EndpointComparisonService {
         ComparisonResultDto resultDto = new ComparisonResultDto(
                 dto.baseUrlA(), dto.baseUrlB(), LocalDateTime.now(), totalMs,
                 ComparisonResultDto.Summary.of(results), results);
+
+        // Yanıt gövdelerinde fark varsa ajan yorumu eklenir. Fark yoksa ajan hiç çağrılmaz;
+        // ajan hata verirse karşılaştırma sonucu yorumsuz olarak döner.
+        String diffAnalysis = responseDiffAgent.analyze(results);
+        if (diffAnalysis != null) {
+            resultDto = resultDto.withDiffAnalysis(diffAnalysis);
+        }
+
         persistRun(resultDto);
         return resultDto;
     }
@@ -150,8 +162,10 @@ public class EndpointComparisonService {
                     item.name(),
                     item.method() != null ? item.method().toUpperCase(Locale.ROOT) : "GET",
                     extractPath(item.url()),
-                    extractHeaders(item.payloadDetails()),
-                    extractBody(item.payloadDetails())
+                    // Ayrıştırıcı artık yapılandırılmış veriyi taşıyor; metin içinden
+                    // JSON'u yeniden ayrıştırmaya gerek yok.
+                    item.headers(),
+                    item.body()
             ));
         }
         return requests;
@@ -179,37 +193,6 @@ public class EndpointComparisonService {
             return trimmed.substring(slashIdx);
         }
         return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
-    }
-
-    private Map<String, String> extractHeaders(String requestNodeJson) {
-        Map<String, String> headers = new LinkedHashMap<>();
-        try {
-            JsonNode node = objectMapper.readTree(requestNodeJson);
-            JsonNode headerArray = node.get("header");
-            if (headerArray != null && headerArray.isArray()) {
-                for (JsonNode h : headerArray) {
-                    if (h.has("key") && h.has("value") && !h.path("disabled").asBoolean(false)) {
-                        headers.put(h.get("key").asText(), h.get("value").asText());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Collection header parse edilemedi: {}", e.getMessage());
-        }
-        return headers;
-    }
-
-    private String extractBody(String requestNodeJson) {
-        try {
-            JsonNode node = objectMapper.readTree(requestNodeJson);
-            JsonNode body = node.get("body");
-            if (body != null && body.has("raw")) {
-                return body.get("raw").asText();
-            }
-        } catch (Exception e) {
-            log.debug("Collection body parse edilemedi: {}", e.getMessage());
-        }
-        return null;
     }
 
     // ─────────────────────────────────────────────────────────
@@ -363,18 +346,21 @@ public class EndpointComparisonService {
         }
     }
 
+    /**
+     * Base URL doğrulaması {@link com.testgen.config.OutboundUrlGuard}'a devredildi.
+     * Eski kontrol yalnızca şema ve host varlığına bakıyordu; karşılaştırma da sunucunun
+     * kendi ağından istek attığı için Runner ile AYNI SSRF yüzeyine sahipti — iki uçtan
+     * biri kapatılıp diğeri açık bırakılırsa koruma anlamsız olur.
+     * Hangi alanın hatalı olduğu bilgisi mesajda korunur.
+     */
     private void validateBaseUrl(String url, String fieldName) {
+        if (url == null || url.isBlank()) {
+            throw new BadRequestException(fieldName + " zorunludur.");
+        }
         try {
-            URI uri = URI.create(url.trim());
-            String scheme = uri.getScheme();
-            if (scheme == null || !(scheme.equals("http") || scheme.equals("https"))) {
-                throw new BadRequestException(fieldName + " http veya https ile başlamalı: " + url);
-            }
-            if (uri.getHost() == null) {
-                throw new BadRequestException(fieldName + " geçerli bir host içermeli: " + url);
-            }
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(fieldName + " geçerli bir URL değil: " + url);
+            urlGuard.verify(url);
+        } catch (BadRequestException e) {
+            throw new BadRequestException(fieldName + " reddedildi — " + e.getMessage());
         }
     }
 
