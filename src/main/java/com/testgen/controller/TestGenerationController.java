@@ -4,6 +4,7 @@ import com.testgen.config.BadRequestException;
 import com.testgen.model.*;
 import com.testgen.model.TestRunStatus;
 import com.testgen.runner.TestRunnerService;
+import com.testgen.service.ConvergenceReportService;
 import com.testgen.service.TestGenerationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,6 +37,7 @@ public class TestGenerationController {
 
     private final TestGenerationService testGenerationService;
     private final TestRunnerService testRunnerService;
+    private final ConvergenceReportService convergenceReportService;
     private final com.testgen.repository.AgentAnalysisRepository agentAnalysisRepository;
 
     /**
@@ -62,6 +64,7 @@ public class TestGenerationController {
                 .additionalContext(dto.additionalContext())
                 .rawPayload(dto.rawPayload())
                 .payloadType(dto.payloadType())
+                .maxCases(dto.maxCases())
                 .build();
 
         var saved = testGenerationService.createRequest(request);
@@ -240,9 +243,64 @@ public class TestGenerationController {
         testRunnerService.runAllForRequest(requestId, recipients);
         return ResponseEntity.accepted().body(Map.of(
                 "requestId", requestId,
-                "message", "Tüm testler başlatıldı. Allure raporu ve email bildirimi hazır olduğunda gönderilecek.",
+                "message", "Tüm testler başlatıldı. Allure raporu ve email bildirimi hazır olduğunda gönderilecek. "
+                        + "Başarısız test çıkarsa iyileştirme OTOMATİK çalışmaz; /self-heal ile siz başlatırsınız.",
                 "recipients", recipients != null ? recipients : List.of("(config default)")
         ));
+    }
+
+    /**
+     * POST /api/v1/tests/{requestId}/self-heal
+     *
+     * Self-healing artık koşum sonrası OTOMATİK tetiklenmez; kullanıcı hatayı
+     * gördükten sonra bu ucu çağırır. Sebep: her başarısız case 2 LLM çağrısı
+     * demek ve otomatik iyileştirme ölçülen koşumda LLM zamanının ~%50'sini
+     * tüketip yeni üretimleri aç bırakıyordu.
+     */
+    @Operation(summary = "Self-Healing Başlat (kullanıcı tetikler)",
+            description = "Bu isteğe ait BAŞARISIZ test case'leri LLM ile analiz edip iyileştirilmiş "
+                    + "sürümlerini üretir ve koşar. Koşum sonrası otomatik çalışmaz — bilinçli olarak "
+                    + "kullanıcı tarafından tetiklenir.",
+            tags = { "1. AI Test Üretim ve Çalıştırma" })
+    @PostMapping("/{requestId}/self-heal")
+    public ResponseEntity<Map<String, Object>> selfHeal(@PathVariable String requestId) {
+        var request = testGenerationService.getRequest(requestId);
+        long failedCount = testGenerationService.getTestCasesByRequestId(requestId).stream()
+                .filter(tc -> tc.getRunStatus() == com.testgen.model.TestRunStatus.FAILED)
+                .count();
+
+        if (failedCount == 0) {
+            return ResponseEntity.ok(Map.of(
+                    "requestId", requestId,
+                    "failedCases", 0,
+                    "message", "İyileştirilecek başarısız test yok."));
+        }
+
+        testRunnerService.selfHealForRequest(requestId);
+        return ResponseEntity.accepted().body(Map.of(
+                "requestId", requestId,
+                "framework", String.valueOf(request.getFramework()),
+                "failedCases", failedCount,
+                "message", failedCount + " başarısız test için iyileştirme başlatıldı. "
+                        + "Her case iki LLM çağrısı gerektirir; sonuçlar case listesinde görünecek."));
+    }
+
+    /**
+     * GET /api/v1/tests/convergence
+     *
+     * "Sistem öğreniyor mu?" sorusunun ölçülmüş cevabı. Öğrenme döngüsü kuruluydu ama
+     * yakınsadığına dair hiçbir ölçüm yoktu; otonom test mühendisi iddiasının tek gerçek
+     * göstergesi aynı servis için turlar arası geçme oranının artmasıdır.
+     */
+    @Operation(summary = "Yakınsama Raporu",
+            description = "Hedef servis bazında ardışık üretim turlarının senaryo geçme oranını, "
+                    + "ayrıca LLM üretimi ve gözlemden üretilen testlerin oranlarını ayrı ayrı döner. "
+                    + "Tüm değerler kaydedilmiş koşum sonuçlarından sayılır.",
+            tags = { "1. AI Test Üretim ve Çalıştırma" })
+    @GetMapping(value = "/convergence", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<ConvergenceReportService.ServiceConvergence>> convergence(
+            @RequestParam(required = false) String serviceKey) {
+        return ResponseEntity.ok(convergenceReportService.report(serviceKey));
     }
 
     /**

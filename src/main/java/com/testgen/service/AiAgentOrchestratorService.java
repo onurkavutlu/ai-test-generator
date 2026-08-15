@@ -26,6 +26,13 @@ public class AiAgentOrchestratorService {
     private final ChatLanguageModel chatModel;
     private final AgentAnalysisRepository agentAnalysisRepository;
 
+    /**
+     * Ajan katmanının genişliği. LEAN (varsayılan) yalnızca çıktısı test üretiminde
+     * doğrudan kullanılan ajanları koşar; FULL önceki davranışı geri getirir.
+     */
+    @org.springframework.beans.factory.annotation.Value("${test-generator.agents.mode:LEAN}")
+    private com.testgen.agent.AgentRouting.Mode agentMode = com.testgen.agent.AgentRouting.Mode.LEAN;
+
     public AiAgentOrchestratorService(List<AiAgent> agents, ChatLanguageModel chatModel,
                                       AgentAnalysisRepository agentAnalysisRepository) {
         this.agents = agents;
@@ -42,7 +49,9 @@ public class AiAgentOrchestratorService {
         AiAgentContext context = new AiAgentContext(request);
 
         // AiServices ile Langchain4j native Tool Calling kullanımı
-        AgentTools tools = new AgentTools(request, agents, context);
+        // Yönlendirme planı Supervisor için de bağlayıcı: plan dışı tool çağrısı koşturulmaz
+        AgentTools tools = new AgentTools(request, agents, context,
+                com.testgen.agent.AgentRouting.resolve(request, effectiveMode(request)));
         SupervisorAgent supervisor = AiServices.builder(SupervisorAgent.class)
                 .chatLanguageModel(chatModel)
                 .tools(tools)
@@ -73,6 +82,17 @@ public class AiAgentOrchestratorService {
             // sistemin tamamını durdurmasın — zorunlu ajanlar deterministik sırayla koşulur.
             log.warn("Supervisor tool-calling başarısız ({}) — deterministik sıralı fallback devrede.",
                     e.getMessage());
+            supervisorReport = runSequentialFallback(request, context);
+        }
+
+        // Sessiz devre dışı kalma koruması: tool calling'i tam desteklemeyen modeller
+        // (örn. llama3.1) istisna fırlatmadan, tool ÇAĞIRMAK yerine tool çağrısını
+        // ANLATAN metin döndürebiliyor. Bu durumda hiçbir ajan koşmaz ama sistem
+        // başarılı görünür — çok-ajanlı analiz sessizce kaybolur. Ajan tanımlı olduğu
+        // hâlde hiçbiri çağrılmadıysa deterministik sıralı koşuma düşülür.
+        if (!agents.isEmpty() && context.results().isEmpty()) {
+            log.warn("Supervisor hiçbir ajanı çağırmadı (tool call yerine düz metin döndü) — "
+                    + "deterministik sıralı fallback devrede.");
             supervisorReport = runSequentialFallback(request, context);
         }
 
@@ -122,20 +142,9 @@ public class AiAgentOrchestratorService {
      * sırayla koşan deterministik fallback. Tek bir ajanın hatası zinciri durdurmaz.
      */
     private String runSequentialFallback(TestGenerationRequest request, AiAgentContext context) {
-        boolean hasUserStory = request.getUserStory() != null && !request.getUserStory().isBlank();
-
-        List<AiAgentRole> order = switch (request.getTestType()) {
-            case BACKEND_API -> hasUserStory
-                    ? List.of(AiAgentRole.PRODUCT_MANAGER, AiAgentRole.DEVELOPER,
-                              AiAgentRole.AI_LLM_TEST_ANALYST, AiAgentRole.TEST_AUTOMATION,
-                              AiAgentRole.SECOPS, AiAgentRole.PERFORMANCE, AiAgentRole.REPORT)
-                    : List.of(AiAgentRole.DEVELOPER, AiAgentRole.AI_LLM_TEST_ANALYST,
-                              AiAgentRole.TEST_AUTOMATION, AiAgentRole.SECOPS,
-                              AiAgentRole.PERFORMANCE, AiAgentRole.REPORT);
-            case FRONTEND_WEB -> List.of(AiAgentRole.PRODUCT_MANAGER, AiAgentRole.AI_LLM_TEST_ANALYST,
-                              AiAgentRole.TEST_AUTOMATION, AiAgentRole.SECOPS,
-                              AiAgentRole.PERFORMANCE, AiAgentRole.REPORT);
-        };
+        // Yönlendirme TEK kaynaktan gelir: Supervisor'a verilen planla birebir aynı liste.
+        // Önceden burada sabit bir liste vardı ve plan pratikte bağlayıcı değildi.
+        List<AiAgentRole> order = com.testgen.agent.AgentRouting.resolve(request, effectiveMode(request));
 
         StringBuilder report = new StringBuilder("(Fallback: sıralı ajan koşumu — Supervisor devre dışı)\n");
         for (AiAgentRole role : order) {
@@ -153,48 +162,21 @@ public class AiAgentOrchestratorService {
     }
 
     /**
-     * İsteğin tipine göre Supervisor'ın hangi uzman ajanlara danışacağını belirler.
-     * Amaç: alakasız ajan çağrılarını (ve LLM maliyetini/latency'yi) önlemek,
-     * kritik uzmanlıkların atlanmamasını garanti etmek.
+     * Supervisor'a verilen yönlendirme planı.
+     *
+     * Plan ve gerçekte koşan ajan listesi AYNI kaynaktan ({@link com.testgen.agent.AgentRouting})
+     * türetilir; böylece plan artık yalnızca bir öneri değil, bağlayıcı bir sözleşmedir.
      */
     String buildRoutingPlan(TestGenerationRequest request) {
-        boolean hasRawPayload = request.getRawPayload() != null && !request.getRawPayload().isBlank();
-        boolean hasUserStory  = request.getUserStory() != null && !request.getUserStory().isBlank();
+        return com.testgen.agent.AgentRouting.buildPlanText(request, effectiveMode(request));
+    }
 
-        StringBuilder plan = new StringBuilder("YÖNLENDİRME PLANI (bu plana uy):\n");
-
-        switch (request.getTestType()) {
-            case BACKEND_API -> {
-                plan.append("- ZORUNLU: askDeveloper (API kontratı ve kısıtlar), askTestAnalyst (ISTQB stratejisi), ")
-                    .append("askTestAutomation (Karate feature tasarımı), askSecOps (401/403, injection).\n");
-                plan.append(hasUserStory
-                        ? "- ZORUNLU: askProductManager (user story'den kabul kriterleri).\n"
-                        : "- GEREKSİZ: askProductManager (user story yok, iş bağlamı çıkarılamaz).\n");
-                plan.append("- ÖNERİLEN: askPerformance (SLA ve büyük payload senaryoları).\n");
-                plan.append("- GEREKSİZ: askDevOps (pipeline analizi test içeriğini değiştirmez; sadece CI/CD sorusu varsa çağır).\n");
-                if (hasRawPayload) {
-                    plan.append("- NOT: Swagger yerine ham payload (")
-                        .append(request.getPayloadType() != null ? request.getPayloadType() : "RAW")
-                        .append(") verildi — askDeveloper'dan kontratı bu payload'dan çıkarmasını iste; endpoint uydurma.\n");
-                }
-            }
-            case FRONTEND_WEB -> {
-                plan.append("- ZORUNLU: askProductManager (kullanıcı yolculuğu ve kabul kriterleri), ")
-                    .append("askTestAnalyst (UI test stratejisi), askTestAutomation (Selenium POM, selector kararlılığı).\n");
-                plan.append("- ÖNERİLEN: askSecOps (XSS/form injection), askPerformance (sayfa yükleme süresi).\n");
-                plan.append("- GEREKSİZ: askDeveloper (backend kontratı UI testinin odağı değil; API doğrulaması gerekiyorsa ")
-                    .append("ayrı bir BACKEND_API isteği açılmasını raporda öner).\n");
-            }
-        }
-
-        if (request.getAdditionalContext() != null
-                && request.getAdditionalContext().contains("## OBSERVED")) {
-            plan.append("- NOT: Bağlamda OBSERVED (gözlem) bölümü var — kontrat, hedeften canlı toplanan ")
-                .append("GERÇEK veridir (yanıt/sayfa/endpoint probları). Tüm ajanlar analiz ve assertion ")
-                .append("önerilerini YALNIZCA bu gözlemlere dayandırmalı; gözlenmeyen alan/status/selector uydurulmamalı.\n");
-        }
-        plan.append("- EN SON: askReportAgent (tüm çıktılar toplandıktan sonra, bir kez).\n");
-        plan.append("- KURAL: Aynı ajanı birden fazla kez çağırma. GEREKSİZ işaretli ajanları çağırma.");
-        return plan.toString();
+    /**
+     * Bu istek için geçerli ajan modu.
+     * İstek üzerinde açıkça belirtilmişse o kullanılır (ölçüm koşumu LEAN/FULL kollarını
+     * böyle ayırır); aksi hâlde konfigürasyondaki varsayılan geçerlidir.
+     */
+    private com.testgen.agent.AgentRouting.Mode effectiveMode(TestGenerationRequest request) {
+        return request.getAgentMode() != null ? request.getAgentMode() : agentMode;
     }
 }

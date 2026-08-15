@@ -13,7 +13,7 @@ public record ManualTestCaseRequestDto(
         @Schema(description = "Kaydedilecek dosya adı (Uzantısı framework'e göre otomatik belirlenir)", example = "GetPetByIdManualTest.feature")
         String fileName,
 
-        @Schema(description = "Test kod bloğu içeriği", example = "Feature: Get pet by id manual\\n  Scenario: Get pet\\n    Given url 'https://petstore3.swagger.io/api/v3'\\n    When method GET\\n    Then status 200")
+        @Schema(description = "Test kod bloğu içeriği", example = "Feature: Get pet by id manual\\n  Scenario: Get pet\\n    Given url 'https://fakerestapi.azurewebsites.net/api/v1'\\n    When method GET\\n    Then status 200")
         @NotBlank(message = "testContent zorunludur")
         String testContent,
 

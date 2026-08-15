@@ -89,6 +89,38 @@ public class GeneratedTestCase {
     @Builder.Default
     private boolean superseded = false;
 
+    /**
+     * İçerik LLM'den değil, gözlemden DETERMİNİSTİK üretildi mi?
+     *
+     * NEDEN GEREKLİ: Gözlemden üretilen içeriğin her değeri gerçek yanıttan okunur;
+     * "düzeltilecek" bir yanı yoktur. Buna rağmen doğrulama kapısı onu da LLM onarımına
+     * sokuyordu ve canlı koşumda LLM, doğru olan sınıfa var olmayan import'lar ekleyip
+     * (io.restassured.matcher.core.HeaderMatcher) içeriği tamamen bozdu.
+     *
+     * Bu bayrak açıkken doğrulama YİNE ÇALIŞIR (kendi üretici hatamızı görmek için),
+     * ama LLM onarımı devreye girmez.
+     */
+    @Builder.Default
+    private boolean deterministic = false;
+
+    // ── Üretim anı doğrulaması ───────────────────────────────
+    /**
+     * İçeriğin üretim anında makine ile doğrulanma sonucu (Karate parse / Java derleme).
+     * Koşulmadan önce içeriğin çalıştırılabilir olup olmadığını gösterir.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    @Builder.Default
+    private ValidationStatus validationStatus = ValidationStatus.NOT_VALIDATED;
+
+    /** Doğrulama başarısızsa parser/derleyici çıktısı; SKIPPED ise atlanma nedeni. */
+    @Column(columnDefinition = "TEXT")
+    private String validationError;
+
+    /** Doğrulamayı geçmek için kaç kez yeniden üretim denendi. */
+    @Builder.Default
+    private int validationAttempts = 0;
+
     // ── LLM meta ─────────────────────────────────────────────
     /** LLM üretiminde kullanılan model adı. */
     private String llmModel;

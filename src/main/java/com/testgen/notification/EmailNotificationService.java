@@ -125,12 +125,40 @@ public class EmailNotificationService {
         helper.setSubject(subject);
         helper.setText(htmlBody, true);   // true = HTML
 
-        // Opsiyonel: Allure rapor dizinini ZIP olarak ekle
-        if (attachReport && summary.getAllureReportUrl() != null) {
-            attachAllureReport(helper, summary.getRequestId());
+        if (attachReport) {
+            attachCucumberReport(helper, summary);
         }
 
         mailSender.send(mime);
+    }
+
+    /**
+     * Üretilen Cucumber HTML raporunu e-postaya ekler.
+     *
+     * Önceden burada yalnızca TODO'lu bir Allure stub'ı vardı; attach-report açık olsa
+     * bile hiçbir zaman ek gönderilmiyordu.
+     */
+    private void attachCucumberReport(MimeMessageHelper helper, TestReportSummary summary) {
+        String path = summary.getCucumberReportPath();
+        if (path == null || path.isBlank()) {
+            log.debug("Cucumber rapor yolu yok, ek atlanıyor - requestId: {}", summary.getRequestId());
+            return;
+        }
+        try {
+            Path reportFile = Path.of(path);
+            if (!Files.exists(reportFile)) {
+                log.warn("Cucumber rapor dosyası bulunamadı, ek atlanıyor: {}", reportFile);
+                return;
+            }
+            String attachmentName = "cucumber-report-" + summary.getRequestId() + ".html";
+            helper.addAttachment(attachmentName, new File(reportFile.toString()));
+            log.info("Cucumber raporu e-postaya eklendi: {} ({} byte)",
+                    attachmentName, Files.size(reportFile));
+        } catch (Exception e) {
+            // Ek eklenemezse e-posta yine de gitsin
+            log.warn("Cucumber raporu eklenemedi - requestId: {}: {}",
+                    summary.getRequestId(), e.getMessage());
+        }
     }
 
     private String renderTemplate(TestReportSummary summary) {
@@ -138,6 +166,7 @@ public class EmailNotificationService {
         ctx.setVariable("summary", summary);
         ctx.setVariable("testCases", summary.getTestCases());
         ctx.setVariable("frameworkSummaries", summary.getFrameworkSummaries());
+        ctx.setVariable("caseDetails", summary.getCaseDetails());
 
         // Durum bazlı şablon seç
         String template = summary.getFailedTests() == 0
@@ -154,15 +183,6 @@ public class EmailNotificationService {
                 .formatted(subjectPrefix, emoji, summary.getProjectName(),
                         summary.getPassedTests(), summary.getTotalTests(),
                         summary.getFormattedDate());
-    }
-
-    private void attachAllureReport(MimeMessageHelper helper, String requestId) {
-        try {
-            // TODO: allure-report dizinini ZIP'le ve ekle
-            log.debug("Allure rapor eki ekleniyor - requestId: {}", requestId);
-        } catch (Exception e) {
-            log.warn("Allure rapor eki eklenemedi", e);
-        }
     }
 
     private List<String> parseRecipients(String raw) {

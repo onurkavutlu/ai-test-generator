@@ -42,6 +42,12 @@ public class DailySchedulerService {
     private final FailureAnalysisService          failureAnalysisService;
     private final ReportOrchestrator              reportOrchestrator;
 
+    @org.springframework.beans.factory.annotation.Value("${test-generator.selenium.remote-url:}")
+    private String seleniumRemoteUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${test-generator.selenium.headless:true}")
+    private boolean seleniumHeadless;
+
     // ─────────────────────────────────────────────────────────
     // Günlük koşum — her gün saat 02:00
     // cron = "saniye dakika saat gün ay haftanın-günü"
@@ -92,8 +98,9 @@ public class DailySchedulerService {
         log.info("--- Koşum başlıyor: {} ---", requestId);
 
         // ── ADIM 1: Mevcut test case'leri koştur ──────────────
+        // Supersede edilmiş (self-healing ile yenisi üretilmiş) case'ler koşulmaz.
         List<GeneratedTestCase> existingCases =
-                testCaseRepository.findByRequestId(requestId);
+                testCaseRepository.findByRequestIdAndSupersededFalse(requestId);
 
         log.info("{} mevcut test case koşturuluyor...", existingCases.size());
         int passed = 0, failed = 0;
@@ -143,7 +150,7 @@ public class DailySchedulerService {
 
         // ── ADIM 4: Allure raporu üret + email gönder ─────────
         List<GeneratedTestCase> allCases =
-                testCaseRepository.findByRequestId(requestId);
+                testCaseRepository.findByRequestIdAndSupersededFalse(requestId);
         reportOrchestrator.generateAndSend(request, allCases);
 
         SchedulerRunSummary summary = new SchedulerRunSummary(
@@ -169,7 +176,7 @@ public class DailySchedulerService {
         try {
             return switch (tc.getFramework()) {
                 case KARATE   -> karateRunner.run(tc);
-                case SELENIUM, REST_ASSURED -> runMavenTest(tc, tc.getFramework().name().toLowerCase());
+                case SELENIUM, REST_ASSURED -> runMavenTest(tc);
             };
         } catch (Exception e) {
             log.error("Test koşumu hata verdi: {}", tc.getTestName(), e);
@@ -181,24 +188,42 @@ public class DailySchedulerService {
         tc.setRunStatus(result.passed() ? TestRunStatus.PASSED : TestRunStatus.FAILED);
         tc.setRunOutput(result.output());
         tc.setTotalScenarios(result.total());
-        tc.setPassedScenarios(result.passed() ? result.total() : 0);
-        tc.setFailedScenarios(result.passed() ? 0 : result.total());
+        // TestRunResult zaten gerçek geçen/kalan sayılarını taşıyor; "hepsi geçti ya da
+        // hiçbiri geçmedi" varsayımı kısmi başarıları (örn. 8/10) raporda kaybediyordu.
+        tc.setPassedScenarios(result.passedCount());
+        tc.setFailedScenarios(result.failedCount());
+        tc.setExecutionTimeMs(result.durationMs());
         tc.setLastRunAt(LocalDateTime.now());
         testCaseRepository.save(tc);
     }
 
-    private TestRunResult runMavenTest(GeneratedTestCase tc, String profile) {
+    private TestRunResult runMavenTest(GeneratedTestCase tc) {
+        long start = System.currentTimeMillis();
+        java.nio.file.Path projectDir = null;
         try {
-            var projectDir = javaTestProjectService.ensureProject(tc.getFramework());
             javaTestProjectService.writeTestSource(tc.getFramework(), tc.getFileName(), tc.getTestContent());
+            // İzole koşum: başka bir bozuk üretilmiş sınıf bu case'i engellemesin
+            String runKey = tc.getId() != null ? tc.getId() : tc.getTestName();
+            projectDir = javaTestProjectService.prepareIsolatedRun(
+                    tc.getFramework(), runKey, tc.getFileName(), tc.getTestContent());
 
             ProcessBuilder pb = new ProcessBuilder(
-                    "mvn", "-B", "-ntp", "test",
+                    javaTestProjectService.resolveMavenCommand(projectDir),
+                    "-B", "-ntp", "test",
                     "-Dtest=" + tc.getTestName(),
                     "-DfailIfNoTests=false"
             );
             pb.directory(projectDir.toFile());
             pb.redirectErrorStream(true);
+
+            // Selenium sürücü hedefini alt sürece taşı — TestRunnerService ile aynı davranış.
+            // Eksik olduğu için zamanlanmış koşumlar konfigürasyonu yok sayıp her zaman
+            // headless çalışıyordu.
+            if (seleniumRemoteUrl != null && !seleniumRemoteUrl.isBlank()) {
+                pb.environment().put("SELENIUM_REMOTE_URL", seleniumRemoteUrl);
+            }
+            pb.environment().put("SELENIUM_HEADLESS", String.valueOf(seleniumHeadless));
+
             Process process = pb.start();
 
             StringBuilder out = new StringBuilder();
@@ -208,22 +233,20 @@ public class DailySchedulerService {
             }
 
             boolean finished = process.waitFor(300, TimeUnit.SECONDS);
+            long durationMs = System.currentTimeMillis() - start;
             if (!finished) {
                 process.destroyForcibly();
-                return TestRunResult.ofMaven(false, "Maven zaman asimina ugradi\n" + out, 0, 0);
+                return TestRunResult.ofMaven(false, "Maven zaman asimina ugradi\n" + out, 0, durationMs);
             }
 
             boolean ok = process.exitValue() == 0;
-            int count = parseTestCount(out.toString());
-            return TestRunResult.ofMaven(ok, out.toString(), count, 0);
+            return TestRunResult.fromSurefireOutput(ok, out.toString(), durationMs);
 
         } catch (Exception e) {
-            return TestRunResult.ofMaven(false, "Maven hatası: " + e.getMessage(), 0, 0);
+            return TestRunResult.ofMaven(false, "Maven hatası: " + e.getMessage(), 0,
+                    System.currentTimeMillis() - start);
+        } finally {
+            javaTestProjectService.cleanupIsolatedRun(projectDir);
         }
-    }
-
-    private int parseTestCount(String output) {
-        var m = java.util.regex.Pattern.compile("Tests run: (\\d+)").matcher(output);
-        return m.find() ? Integer.parseInt(m.group(1)) : 1;
     }
 }

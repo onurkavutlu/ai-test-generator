@@ -24,6 +24,43 @@ public final class PromptTemplates {
                 return spec.length() > 3000 ? spec.substring(0, 3000) + "\n... [spec kısaltıldı]" : spec;
         }
 
+        /** Bağlam bütçesi — ölçüme göre seçildi, bkz. {@link #boundContext}. */
+        private static final int CONTEXT_BUDGET = 6000;
+
+        /**
+         * additionalContext'i bütçeye sığdırır; GÖZLEM bölümlerini korur.
+         *
+         * ÖLÇÜLEN SORUN: Bu bağlam ajan analizleriyle birlikte 25.000 karaktere kadar
+         * büyüyor ve HER ENDPOINT çağrısında yeniden gönderiliyordu. Prompt'lar 34.000
+         * karaktere çıkınca çağrı başına ~40 saniyeye ulaştı; 5 case'lik bir modül
+         * 8-10 dakika sürüyordu. Prompt'un uzunluğu doğrudan maliyettir.
+         *
+         * Kesme sırası bilinçli: "## OBSERVED" bölümleri hedeften CANLI okunan gerçek
+         * veridir ve üretim kalitesini en çok belirleyen kısımdır — onlar tam korunur,
+         * kısaltma ajan analizlerinden yapılır.
+         */
+        public static String boundContext(String context) {
+                if (context == null || context.length() <= CONTEXT_BUDGET) {
+                        return context == null ? "" : context;
+                }
+
+                int observedAt = context.indexOf("## OBSERVED");
+                if (observedAt < 0) {
+                        return context.substring(0, CONTEXT_BUDGET) + "\n... [bağlam kısaltıldı]";
+                }
+
+                String observed = context.substring(observedAt);
+                if (observed.length() >= CONTEXT_BUDGET) {
+                        // Gözlem tek başına bütçeyi doldurusa yalnızca onu gönder
+                        return observed.substring(0, CONTEXT_BUDGET) + "\n... [gözlem kısaltıldı]";
+                }
+
+                int headBudget = CONTEXT_BUDGET - observed.length();
+                return context.substring(0, Math.min(headBudget, observedAt))
+                                + "\n... [ajan analizi kısaltıldı]\n\n"
+                                + observed;
+        }
+
         /**
          * ISTQB test tasarım teknikleri kural seti — tüm prompt'lara eklenir.
          */
@@ -64,12 +101,27 @@ public final class PromptTemplates {
 
                                 Requirements:
                                 - Use Karate DSL syntax (Feature, Background, Scenario)
-                                - Background: set baseUrl and Content-Type header
+                                - SYNTAX RULES (VIOLATING THESE MAKES THE WHOLE FEATURE UNRUNNABLE):
+                                  * A header step REQUIRES a name:  `* header Accept = 'application/json'`
+                                  * For several headers use the PLURAL map form: `* headers { Accept: 'application/json' }`
+                                  * NEVER write `* header = { ... }` — Karate has no such step and every
+                                    scenario in the file will fail with "no step-definition method match found".
+                                  * Value-taking steps take NO `=`: write `* url 'http://host'`, `* path '/x'`,
+                                    `* method get`, `* status 200` — never `* url = '...'`.
+                                  * Variables need `def`: `* def baseUrl = 'http://host'`.
+                                  * The response object is `response` — there is NO `response.body`.
+                                    Assert with `match response ...` / `match response.field == '#notnull'`.
+                                - Background: set baseUrl with `* def baseUrl = '...'`; add a Content-Type
+                                  header only when the request actually sends a body
                                 - APPLICABILITY RULE (CRITICAL): The scenario lists below are TEMPLATES.
                                   Only generate scenarios that genuinely apply to the target.
                                   If the Context explicitly states something does not exist or must not be tested
                                   (e.g. "auth YOK", "400 senaryosu YOKTUR", "form YOK"), OMIT those scenarios entirely.
                                   A passing, applicable subset is better than a failing, complete template.
+                                - EVIDENCE RULE (CRITICAL): Never invent an expected status code. Assert a status
+                                  only when the OpenAPI excerpt declares it or the Context states it. If the spec
+                                  declares only 200, do NOT write 400/401/404/500 scenarios for that endpoint —
+                                  omit them. An endpoint with no documented auth has no 401 scenario.
                                 - Include these scenarios (only the applicable ones):
 
                                   ## Fonksiyonel Testler:
@@ -94,7 +146,7 @@ public final class PromptTemplates {
 
                                 Return ONLY the .feature file content. No explanation.
                                 """
-                                .formatted(method, endpoint, context, truncateSpec(swaggerContent), ISTQB_RULES);
+                                .formatted(method, endpoint, boundContext(context), truncateSpec(swaggerContent), ISTQB_RULES);
         }
 
         // ─────────────────────────────────────────────────────────
@@ -125,12 +177,22 @@ public final class PromptTemplates {
                                   (DriverFactory is already provided in the same package — do NOT define it or import it)
                                 - Always call driver.quit() in @AfterEach
                                 - No custom base classes.
+                                - PAGE OBJECT CONTRACT (CRITICAL — VIOLATING THIS MAKES EVERY TEST FAIL WITH NullPointerException):
+                                  * The page class MUST take the driver in its constructor:
+                                    `public DashboardPage(WebDriver driver) { this.driver = driver; }`
+                                  * The test MUST pass its own driver when creating it: `new DashboardPage(driver)`.
+                                  * NEVER write `new DashboardPage()` — the page's driver field stays null and
+                                    every call fails with "this.driver is null".
+                                  * The page class must NOT create its own driver.
 
                                 - APPLICABILITY RULE (CRITICAL): The scenario lists below are TEMPLATES.
                                   Only generate scenarios that genuinely apply to the target.
                                   If the Context explicitly states something does not exist or must not be tested
                                   (e.g. "auth YOK", "400 senaryosu YOKTUR", "form YOK"), OMIT those scenarios entirely.
                                   A passing, applicable subset is better than a failing, complete template.
+                                - EVIDENCE RULE (CRITICAL): Use ONLY the selectors and texts given in the HTML hints.
+                                  Never invent an element id, class, or expected label. If the hints show no login
+                                  form, do not write a login test; if they show no error banner, do not assert one.
                                 Test Methods (only the applicable ones — ISTQB etiketli):
                                   ## Fonksiyonel:
                                   1. smokeShouldLoadPage — [SMOKE][P0][EP] Geçerli sayfa yüklemesi
@@ -151,7 +213,7 @@ public final class PromptTemplates {
                                 Return ONLY Java code. No explanation.
                                 """
                                 .formatted(pageUrl, userStory,
-                                                htmlHint != null ? htmlHint : "not provided", ISTQB_RULES);
+                                                htmlHint != null ? boundContext(htmlHint) : "not provided", ISTQB_RULES);
         }
 
 
@@ -175,6 +237,13 @@ public final class PromptTemplates {
                                 Requirements:
                                 - MUST start with exactly: package com.testgen.generated;
                                 - MUST include all required imports (e.g. io.restassured.RestAssured, org.junit.jupiter.api.*, org.hamcrest.Matchers.*).
+                                - API RULES (VIOLATING THESE BREAKS COMPILATION AND KILLS EVERY TEST IN THE CLASS):
+                                  * Matchers live in `org.hamcrest.Matchers` — there is NO `io.restassured.matcher.Matchers`.
+                                  * Do NOT import symbols you never use.
+                                  * There is NO `timeLessThan(...)`. For response time write:
+                                    `.then().time(lessThan(2000L))` with `import static org.hamcrest.Matchers.lessThan;`
+                                  * Use only real REST Assured / Hamcrest methods. If unsure a method exists,
+                                    assert with `.statusCode(...)` or `.body(...)` instead of inventing one.
                                 - Class name must end with 'Test' (e.g. GeneratedApiTest).
                                 - Use JUnit 5 (@Test, @BeforeEach, etc).
                                 - Set RestAssured.baseURI and setup headers in @BeforeEach.
@@ -184,6 +253,10 @@ public final class PromptTemplates {
                                   If the Context explicitly states something does not exist or must not be tested
                                   (e.g. "auth YOK", "400 senaryosu YOKTUR"), OMIT those scenarios entirely.
                                   A passing, applicable subset is better than a failing, complete template.
+                                - EVIDENCE RULE (CRITICAL): Never invent an expected status code. Assert a status
+                                  only when the OpenAPI excerpt declares it or the Context states it. If the spec
+                                  declares only 200, do NOT write 400/401/404/500 scenarios for that endpoint —
+                                  omit them. An endpoint with no documented auth has no 401 scenario.
                                 - Include these scenarios (only the applicable ones):
 
                                   ## Fonksiyonel Testler:
@@ -201,7 +274,7 @@ public final class PromptTemplates {
 
                                 Return ONLY Java code. No explanation.
                                 """
-                                .formatted(method, endpoint, context, truncateSpec(swaggerContent), ISTQB_RULES);
+                                .formatted(method, endpoint, boundContext(context), truncateSpec(swaggerContent), ISTQB_RULES);
         }
 
         // ─────────────────────────────────────────────────────────
@@ -269,6 +342,10 @@ public final class PromptTemplates {
                                   If the Context explicitly states something does not exist or must not be tested
                                   (e.g. "auth YOK", "400 senaryosu YOKTUR", "form YOK"), OMIT those scenarios entirely.
                                   A passing, applicable subset is better than a failing, complete template.
+                                - EVIDENCE RULE (CRITICAL): Never invent an expected status code. Assert a status
+                                  only when the OpenAPI excerpt declares it or the Context states it. If the spec
+                                  declares only 200, do NOT write 400/401/404/500 scenarios for that endpoint —
+                                  omit them. An endpoint with no documented auth has no 401 scenario.
                                 - Include these scenarios (only the applicable ones):
                                   1. [SMOKE][P0_BLOCKER][EP] Happy path — send the exact payload and verify success
                                   2. [REGRESSION][P1_CRITICAL][EP] Modify the payload with different valid variations

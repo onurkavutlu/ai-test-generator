@@ -5,6 +5,7 @@ import com.testgen.model.TestFramework;
 import com.testgen.model.TestType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 @JacksonXmlRootElement(localName = "testGenerationRequest")
 public record TestGenerationRequestDto(
@@ -20,7 +21,7 @@ public record TestGenerationRequestDto(
         @Schema(description = "Kullanıcı hikayesi (User Story - Selenium için)", example = "Kullanıcı yeni evcil hayvan ekleyebilmeli ve durumunu listeleyebilmeli.")
         String userStory,
 
-        @Schema(description = "API dökümantasyon adresi (Karate API için)", example = "https://petstore3.swagger.io/api/v3/openapi.json")
+        @Schema(description = "API dökümantasyon adresi (Karate API için)", example = "https://fakerestapi.azurewebsites.net/swagger/v1/swagger.json")
         String swaggerUrl,
 
         @Schema(description = "Uygulama giriş adresi (Selenium Web için)", example = "https://example.com/login")
@@ -33,5 +34,18 @@ public record TestGenerationRequestDto(
         String rawPayload,
 
         @Schema(description = "Ham veri formatı (CURL, JSON, XML)", example = "CURL")
-        String payloadType
+        String payloadType,
+
+        /*
+         * Swagger'dan üretimde case sayısı endpoint sayısına eşittir; 37 yollu bir API
+         * 45 case ve ~25 dakika üretim demek. Bunu prompt'la sınırlamak İŞE YARAMAZ
+         * (prompt yalnızca dosya içindeki senaryo sayısını etkiler), bu yüzden sınır
+         * üretici döngüsünde uygulanır.
+         */
+        @Schema(description = "OPSİYONEL — üretilecek en fazla test case sayısı. Verilirse her zaman kazanır. "
+                + "Boş bırakılırsa test-generator.generation.default-max-cases yapılandırması, "
+                + "o da 0 ise sınırsız (Swagger'daki her endpoint için bir case) uygulanır.",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED, example = "5")
+        @Positive(message = "maxCases pozitif olmalıdır")
+        Integer maxCases
 ) {}

@@ -26,11 +26,19 @@ public class KarateRunner {
     private int parallelThreads;
 
     public TestRunResult run(GeneratedTestCase testCase) {
+        Path runDir = null;
         try {
-            // Feature dosyasını geçici dizine yaz
+            // Feature dosyasını geçici dizine yaz (gözden geçirilebilir "son üretim" kopyası)
             Path featureDir = Path.of(karateOutputPath);
             Files.createDirectories(featureDir);
-            Path featureFile = featureDir.resolve(testCase.getFileName());
+            Files.writeString(featureDir.resolve(testCase.getFileName()), testCase.getTestContent());
+
+            // Koşum, case'e özel izole bir dizinde yapılır. Aynı sabit rapor dizinini
+            // paylaşan paralel koşumlar birbirinin karate-json dosyasını siliyor ve
+            // FileNotFoundException ile "0/0 FAILED" gibi sahte sonuçlar üretiyordu.
+            runDir = featureDir.resolve("runs").resolve(runKeyOf(testCase));
+            Files.createDirectories(runDir);
+            Path featureFile = runDir.resolve(testCase.getFileName());
             Files.writeString(featureFile, testCase.getTestContent());
 
             log.info("Karate feature çalıştırılıyor: {}", featureFile);
@@ -39,7 +47,7 @@ public class KarateRunner {
 
             // Karate Runner API ile çalıştır
             Results results = Runner.path(featureFile.toString())
-                    .reportDir(karateOutputPath + "/karate-reports")
+                    .reportDir(runDir.resolve("karate-reports").toString())
                     .parallel(parallelThreads);
 
             long durationMs = System.currentTimeMillis() - startMs;
@@ -67,6 +75,34 @@ public class KarateRunner {
         } catch (Exception e) {
             log.error("Karate çalıştırma hatası", e);
             return TestRunResult.of(false, "Karate hatası: " + e.getMessage(), 0, 0, 0, 0);
+        } finally {
+            deleteQuietly(runDir);
+        }
+    }
+
+    /** Koşum dizini anahtarı: case id varsa o, yoksa dosya adı + thread (manuel/mock case'ler için). */
+    private String runKeyOf(GeneratedTestCase testCase) {
+        String base = testCase.getId() != null
+                ? testCase.getId()
+                : testCase.getFileName() + "-" + Thread.currentThread().getId();
+        return base.replaceAll("[^A-Za-z0-9._-]", "_");
+    }
+
+    /** İzole koşum dizinini temizler; başarısız olursa koşum sonucunu etkilemez. */
+    private void deleteQuietly(Path dir) {
+        if (dir == null || !Files.exists(dir)) {
+            return;
+        }
+        try (var paths = Files.walk(dir)) {
+            paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException ignored) {
+                    // geçici dosya kalması koşumu etkilemez
+                }
+            });
+        } catch (IOException e) {
+            log.debug("Karate koşum dizini temizlenemedi: {}", dir);
         }
     }
 }
