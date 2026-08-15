@@ -8,8 +8,18 @@ target/
 # (bağımlılıkları Docker build ve ./mvnw kendisi indirir)
 .m2/
 
-# Claude Code oturum dosyaları
-.claude/
+# Claude Code oturum dosyaları.
+# DİZİNİN KENDİSİ değil İÇERİĞİ dışlanır (.claude/* ), çünkü git bir dizin komple
+# dışlandığında içindeki "!" negasyonlarını DEĞERLENDİRMEZ — skill yine yok sayılırdı.
+.claude/*
+# Graphify skill'i ve hook ayarları PAYLAŞILAN yapılandırmadır: ekipteki herkesin
+# aynı bilgi grafiği kurallarıyla çalışması için sürüm kontrolünde kalmalı.
+!.claude/skills/
+!.claude/settings.json
+
+# Graphify çıktıları: koda göre yeniden üretilir (graphify update / hook).
+# 6.8MB'lık graph.json + graph.html repoyu şişirir; rapor da türetilmiş içeriktir.
+graphify-out/
 
 # IDE
 .idea/
@@ -46,3 +56,9 @@ ajcore.*.txt
 
 # Allure results (generated at runtime)
 allure-results/
+
+# Cowork oturumunda silinemeyen dosyaların taşındığı ara dizin (yerel, 500MB+).
+_to_delete/
+
+# Teslimat için üretilen git bundle'ı — repoyu kendi içine gömmenin anlamı yok.
+*.bundle
