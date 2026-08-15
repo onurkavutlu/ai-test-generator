@@ -30,6 +30,9 @@ public class ReportOrchestrator {
     private final AllureReportService   allureReportService;
     private final CucumberReportService cucumberReportService;
 
+    @org.springframework.beans.factory.annotation.Value("${notification.email.app-base-url:http://localhost:8080}")
+    private String appBaseUrl;
+
     // Email servisi isteğe bağlı (conditional bean)
     @Autowired(required = false)
     private EmailNotificationService emailNotificationService;
@@ -42,9 +45,24 @@ public class ReportOrchestrator {
     public ReportResult generateAndSend(TestGenerationRequest request,
                                          List<GeneratedTestCase> testCases,
                                          List<String> recipients) {
+        return generateAndSend(request.getId(), request.getAdditionalContext(), testCases, recipients);
+    }
 
-        String requestId = request.getId();
-        log.info("Rapor üretimi başlıyor - requestId: {}", requestId);
+    /**
+     * Üretim isteğinden bağımsız raporlama girişi.
+     *
+     * Test Plan / Test Suite koşumlarında case'ler birden fazla üretim isteğinden gelebilir;
+     * bu durumda rapor kimliği olarak koşum (execution) kimliği kullanılır.
+     *
+     * @param reportId rapor kimliği (requestId veya executionId)
+     * @param context  ajan analizi bağlamı (yoksa null)
+     */
+    public ReportResult generateAndSend(String reportId, String context,
+                                         List<GeneratedTestCase> testCases,
+                                         List<String> recipients) {
+
+        String requestId = reportId;
+        log.info("Rapor üretimi başlıyor - reportId: {}", requestId);
 
         // 1. Allure JSON result'larını yaz
         allureReportService.writeAllResults(testCases, requestId);
@@ -59,8 +77,12 @@ public class ReportOrchestrator {
             log.info("Cucumber raporu hazır: {}", cucumberReportPath);
         }
 
-        // 3. Özet DTO
-        TestReportSummary summary = TestReportSummary.from(requestId, request.getAdditionalContext(), testCases, reportUrl);
+        // 3. Özet DTO — Cucumber raporu e-postaya eklenebilsin ve linklenebilsin
+        TestReportSummary summary = TestReportSummary.from(requestId, context, testCases, reportUrl);
+        if (cucumberReportPath != null) {
+            summary.setCucumberReportPath(cucumberReportPath.toAbsolutePath().toString());
+        }
+        summary.setCucumberReportUrl(buildCucumberUrl(requestId));
 
         log.info("Test özeti - total:{} passed:{} failed:{} passRate:{}",
                 summary.getTotalTests(), summary.getPassedTests(),
@@ -86,6 +108,14 @@ public class ReportOrchestrator {
     public ReportResult generateAndSend(TestGenerationRequest request,
                                          List<GeneratedTestCase> testCases) {
         return generateAndSend(request, testCases, null);
+    }
+
+    private String buildCucumberUrl(String requestId) {
+        String base = appBaseUrl == null || appBaseUrl.isBlank() ? "http://localhost:8080" : appBaseUrl.trim();
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base + "/reports/cucumber/" + requestId;
     }
 
     // ── Value object ──────────────────────────────────────────

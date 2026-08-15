@@ -38,6 +38,10 @@ public class TestReportSummary {
     // Allure link
     private String allureReportUrl;
 
+    // Cucumber raporu: e-postaya eklenen dosya + tarayıcıdan açılabilir adres
+    private String cucumberReportPath;
+    private String cucumberReportUrl;
+
     // Ham test case listesi
     private List<GeneratedTestCase> testCases;
 
@@ -119,6 +123,27 @@ public class TestReportSummary {
                 .toList();
     }
 
+    /**
+     * E-posta gövdesinde paylaşılan case → senaryo → adım kırılımı.
+     * İçerik test kaynağından ayrıştırılır; ayrıştırılamazsa senaryo listesi boş kalır.
+     */
+    public List<CaseDetail> getCaseDetails() {
+        if (testCases == null || testCases.isEmpty()) {
+            return List.of();
+        }
+        return testCases.stream().map(tc -> CaseDetail.builder()
+                .testName(tc.getTestName())
+                .framework(tc.getFramework() != null ? tc.getFramework().name() : "-")
+                .runStatus(tc.getRunStatus() != null ? tc.getRunStatus().name() : "NOT_RUN")
+                .executionTimeMs(tc.getExecutionTimeMs())
+                .passedScenarios(tc.getPassedScenarios())
+                .totalScenarios(tc.getTotalScenarios())
+                .scenarios(ScenarioExtractor.extract(tc).stream()
+                        .map(s -> new ScenarioDetail(s.name(), s.tags(), s.steps()))
+                        .toList())
+                .build()).toList();
+    }
+
     private static boolean hasTag(GeneratedTestCase testCase, String tag) {
         return testCase.getTestSummary() != null && testCase.getTestSummary().contains("[" + tag + "]");
     }
@@ -177,7 +202,40 @@ public class TestReportSummary {
                 .count();
     }
 
-    // ── İç sınıf ──────────────────────────────────────────
+    // ── İç sınıflar ───────────────────────────────────────
+
+    /** E-posta gövdesinde gösterilen tek bir test case ve senaryoları. */
+    @Data
+    @Builder
+    public static class CaseDetail {
+        private String testName;
+        private String framework;
+        private String runStatus;
+        private Long executionTimeMs;
+        private Integer passedScenarios;
+        private Integer totalScenarios;
+        private List<ScenarioDetail> scenarios;
+
+        public String getDurationFormatted() {
+            return executionTimeMs != null ? String.format("%.2fs", executionTimeMs / 1000.0) : "–";
+        }
+
+        public String getScenarioSummary() {
+            if (totalScenarios == null || totalScenarios == 0) {
+                return scenarios == null || scenarios.isEmpty() ? "–" : scenarios.size() + " senaryo";
+            }
+            return (passedScenarios != null ? passedScenarios : 0) + " / " + totalScenarios;
+        }
+    }
+
+    /** Bir senaryo ve içindeki adımlar. */
+    public record ScenarioDetail(String name, List<String> tags, List<String> steps) {
+        public String getName()        { return name; }
+        public List<String> getTags()  { return tags; }
+        public List<String> getSteps() { return steps; }
+        public String getTagLine()     { return tags == null ? "" : String.join(" ", tags); }
+    }
+
     @Data
     @Builder
     public static class FrameworkSummary {

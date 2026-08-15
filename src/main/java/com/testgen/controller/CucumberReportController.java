@@ -21,15 +21,25 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class CucumberReportController {
 
+    /** text/html;charset=UTF-8 — charset olmadan Türkçe karakterler bozulur. */
+    private static final MediaType HTML_UTF8 =
+            new MediaType(MediaType.TEXT_HTML, java.nio.charset.StandardCharsets.UTF_8);
+
     private final CucumberReportService cucumberReportService;
     private final TestGenerationService testGenerationService;
 
     @Operation(summary = "Cucumber HTML Raporunu Görüntüle",
                description = "Seçili request için Cucumber HTML raporunu tarayıcıda gösterir.")
-    @GetMapping(value = "/{requestId}", produces = MediaType.TEXT_HTML_VALUE)
+    /**
+     * Charset BİLEREK açık yazılıyor. {@code MediaType.TEXT_HTML} charset taşımaz ve
+     * Spring bu durumda ISO-8859-1 varsayar; Türkçe senaryo adları ("Ürün silinemez")
+     * tarayıcıya bozuk ulaşır ("Ã¼"). Rapor içeriği UTF-8 üretildiği için sunum da
+     * UTF-8 olarak işaretlenmelidir.
+     */
+    @GetMapping(value = "/{requestId}", produces = MediaType.TEXT_HTML_VALUE + ";charset=UTF-8")
     public ResponseEntity<String> getReport(@PathVariable String requestId) {
         return cucumberReportService.readReport(requestId)
-                .map(html -> ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html))
+                .map(html -> ResponseEntity.ok().contentType(HTML_UTF8).body(html))
                 .orElseGet(() -> {
                     // Rapor yoksa hızlıca üret ve sun
                     var testCases = testGenerationService.getTestCasesByRequestId(requestId);
@@ -38,7 +48,7 @@ public class CucumberReportController {
                     }
                     cucumberReportService.generateReport(requestId, testCases);
                     return cucumberReportService.readReport(requestId)
-                            .map(html -> ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html))
+                            .map(html -> ResponseEntity.ok().contentType(HTML_UTF8).body(html))
                             .orElseGet(() -> ResponseEntity.internalServerError()
                                     .<String>build());
                 });

@@ -41,10 +41,13 @@ public class HarFileParser {
                             String url = request.has("url") ? request.get("url").asText() : "Unknown URL";
                             String name = method + " " + extractPath(url);
                             
-                            // Hem request hem response'u LLM'e göndermek için birleştiriyoruz
-                            String details = "Request:\n" + request.toPrettyString() + "\n\nResponse:\n" + response.toPrettyString();
-                            
-                            results.add(new ParsedRequestDto(name, method, url, details));
+                            // Ham HAR girdisi onlarca KB olabiliyor ve prompt'u bağlam
+                            // penceresinin dışına taşıyordu; yalnızca anlamlı alanlar taşınır.
+                            String details = RequestDetailFormatter.fromHar(request, response, method, url);
+
+                            results.add(new ParsedRequestDto(name, method, url, details,
+                                    RequestDetailFormatter.harHeaders(request),
+                                    RequestDetailFormatter.harBody(request)));
                         }
                     }
                 }
