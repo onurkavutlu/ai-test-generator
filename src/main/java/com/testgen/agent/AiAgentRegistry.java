@@ -48,4 +48,14 @@ public class AiAgentRegistry {
     public AiAgent required(AiAgentRole role) {
         return agents.get(Objects.requireNonNull(role, "role"));
     }
+
+    /**
+     * Orkestrasyon katmanının bir rolü planlamadan önce doğrulaması için açık
+     * kullanılabilirlik sorgusu. Registry uygulama başlangıcında zaten fail-fast
+     * davrandığından normal üretim akışında tüm roller kayıtlıdır; bu metot yeni
+     * planlama sınırının somut agent sınıflarını bilmesine gerek bırakmaz.
+     */
+    public boolean contains(AiAgentRole role) {
+        return agents.containsKey(Objects.requireNonNull(role, "role"));
+    }
 }
