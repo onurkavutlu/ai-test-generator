@@ -443,6 +443,21 @@
                                         </limit>
                                     </limits>
                                 </rule>
+                                <!-- Yeni orchestration çekirdeği, framework veya provider
+                                     bağımlılığı eklemeden kapalı plan sözleşmesini korur. -->
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <includes>
+                                        <include>com.testgen.orchestration</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
                             </rules>
                             <excludes>
                                 <!-- Veri taşıyıcıları ve Spring giriş noktası: davranış içermez,
