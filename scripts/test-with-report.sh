@@ -29,7 +29,9 @@ fi
 TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
 SLUG="$(printf '%s' "$LABEL" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//')"
 REPORT_DIR="$PROJECT_ROOT/docs/test-reports"
-LOG_DIR="$PROJECT_ROOT/target/test-run-logs"
+# `clean` hedefi target/ altını Maven çalışırken siler. Koşum günlüğü rapor
+# üretiminden önce kaybolmasın diye kalıcı ama .gitignore'daki logs/ altında tut.
+LOG_DIR="$REPORT_DIR/logs"
 REPORT_FILE="$REPORT_DIR/$TIMESTAMP-$SLUG.md"
 LOG_FILE="$LOG_DIR/$TIMESTAMP-$SLUG.log"
 
