@@ -69,7 +69,6 @@ class ObservationPersistenceTest {
                 .testType(TestType.BACKEND_API).framework(TestFramework.KARATE)
                 .rawPayload("curl --location '" + baseUrl + "/echo' --data '{\"a\":1}'")
                 .payloadType("CURL")
-                .observeMutating(true)
                 .build();
 
         service.enrichWithObservations(req);
@@ -84,34 +83,12 @@ class ObservationPersistenceTest {
     }
 
     @Test
-    @DisplayName("Onay yokken atlama NEDENİ saklanır — sessizce boş bırakılmaz")
-    void skipReasonIsRecorded() {
-        TestGenerationRequest req = TestGenerationRequest.builder()
-                .testType(TestType.BACKEND_API).framework(TestFramework.KARATE)
-                .rawPayload("curl --location '" + baseUrl + "/echo' --data '{\"a\":1}'")
-                .payloadType("CURL")
-                .observeMutating(false)
-                .build();
-
-        service.enrichWithObservations(req);
-
-        assertNull(req.getObservedStatus());
-        assertNull(req.getObservedDurationMs());
-        assertNotNull(req.getObservationSkipReason());
-        assertTrue(req.getObservationSkipReason().contains("onayı"),
-                req.getObservationSkipReason());
-        // İstek satırı yine saklanır: kullanıcı NEYİN gözlenmediğini görmeli.
-        assertTrue(req.getObservedRequestLine().startsWith("POST "), req.getObservedRequestLine());
-    }
-
-    @Test
     @DisplayName("Hedefe ulaşılamazsa neden saklanır, uydurma status yazılmaz")
     void unreachableTargetRecordsReason() {
         TestGenerationRequest req = TestGenerationRequest.builder()
                 .testType(TestType.BACKEND_API).framework(TestFramework.KARATE)
                 .rawPayload("curl --location 'http://localhost:1/yok' --data '{}'")
                 .payloadType("CURL")
-                .observeMutating(true)
                 .build();
 
         service.enrichWithObservations(req);
@@ -120,5 +97,7 @@ class ObservationPersistenceTest {
         assertNotNull(req.getObservationSkipReason());
         assertTrue(req.getObservationSkipReason().contains("yanıt alınamadı"),
                 req.getObservationSkipReason());
+        // İstek satırı yine saklanır: kullanıcı NEYİN gözlenemediğini görmeli.
+        assertTrue(req.getObservedRequestLine().startsWith("POST "), req.getObservedRequestLine());
     }
 }

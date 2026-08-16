@@ -21,9 +21,12 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 public class TestGenerationService {
 
-    private final KarateTestGenerator karateTestGenerator;
-    private final SeleniumTestGenerator seleniumTestGenerator;
-    private final RestAssuredTestGenerator restAssuredTestGenerator;
+    /**
+     * Framework seçimi tek noktada yapılır; bu servis somut Karate/Selenium/REST Assured
+     * sınıflarını tanımaz. Yeni framework, {@code FrameworkTestGenerator} sözleşmesini
+     * uygulayıp registry'ye kaydolarak eklenir.
+     */
+    private final com.testgen.generator.FrameworkTestGeneratorRegistry frameworkGenerators;
     private final TestGenerationRequestRepository requestRepository;
     private final GeneratedTestCaseRepository testCaseRepository;
     private final AiAgentOrchestratorService aiAgentOrchestratorService;
@@ -89,11 +92,7 @@ public class TestGenerationService {
             String enrichedContext = request.getAdditionalContext();
             updateRequest(requestId, request, fresh -> fresh.setAdditionalContext(enrichedContext));
 
-            List<GeneratedTestCase> cases = switch (request.getFramework()) {
-                case KARATE  -> karateTestGenerator.generate(request);
-                case SELENIUM -> seleniumTestGenerator.generate(request);
-                case REST_ASSURED -> restAssuredTestGenerator.generate(request);
-            };
+            List<GeneratedTestCase> cases = frameworkGenerators.generate(request);
 
             if (cases.isEmpty()) {
                 throw new TestGenerationException("Calistirilabilir test case uretilemedi.");
@@ -173,8 +172,8 @@ public class TestGenerationService {
         }
         throw new TestGenerationException(
                 "Hedef verildi ancak gözlem yapılamadı — üretim ölçülmemiş veriye dayanamaz. "
-                + "Yan etkili istekler için observeMutating=true ile onay verin ya da hedefe "
-                + "erişimi doğrulayın. Gözlem notu: "
+                + "Hedefe erişimi doğrulayın (ağ, TLS, kimlik doğrulama) ve tekrar deneyin. "
+                + "Gözlem notu: "
                 + firstLineOf(extractObservedSection(ctx)));
     }
 

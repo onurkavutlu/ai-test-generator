@@ -97,7 +97,7 @@ public class ObservationService {
             if (request.getTestType() == TestType.FRONTEND_WEB) {
                 section = observePage(request.getApplicationUrl());
             } else if (request.getRawPayload() != null && !request.getRawPayload().isBlank()) {
-                section = observeCurl(request.getRawPayload(), request.isObserveMutating(), request);
+                section = observeCurl(request.getRawPayload(), request);
             } else if (request.getSwaggerUrl() != null && !request.getSwaggerUrl().isBlank()) {
                 section = observeSwagger(request.getSwaggerUrl());
             } else {
@@ -159,30 +159,25 @@ public class ObservationService {
     // ─────────────────────────────────────────────────────────
 
     /**
-     * @param observeMutating kullanıcı yan etkili isteğin gerçekten gönderilmesine
-     *                        açıkça izin verdi mi
+     * Kullanıcının verdiği isteği <b>metoduna bakmaksızın</b> gönderir.
+     *
+     * <p><b>Neden metot ayrımı yok:</b> isteği kullanıcı seçti ve kendi eliyle buraya
+     * yapıştırdı. "Bu isteğe test yaz" demenin, "bu isteği çalıştır" dışında bir anlamı
+     * yoktur — Postman'de Send'e basmakla aynı şey. Bir dönem burada POST/DELETE için
+     * onay kapısı vardı; hiçbir şeyi güvenli hâle getirmedi, yalnızca kullanıcının kendi
+     * verdiği isteği gözlemlemesini engelledi ve üretim ölçümsüz kaldı.
+     *
+     * <p>Onay kuralı isteğin <b>metoduna</b> değil <b>kaynağına</b> bağlıdır ve doğru
+     * yerde uygulanır: aracın kendi keşfettiği uçlar (Swagger tarama) yalnızca yan
+     * etkisiz olarak problanır — bkz. {@code observeSwagger}. Orada kullanıcı o
+     * çağrıları hiç istememiştir.
      */
-    private String observeCurl(String rawPayload, boolean observeMutating,
-                               TestGenerationRequest request) {
+    private String observeCurl(String rawPayload, TestGenerationRequest request) {
         var parsed = curlParser.parse(rawPayload);
         if (parsed == null) return null;
 
         String method = parsed.method();
         String url = parsed.url();
-
-        // Yan etkili istek kullanıcı onayı olmadan GÖNDERİLMEZ. Onaysız durumda
-        // "gözlemlenmedi" denir; "erişilemedi" DENMEZ — ikisi farklı şeydir ve ajanlar
-        // ikincisini yanlış öncül olarak kullanıyordu.
-        if (!com.testgen.parser.CurlParser.isSafeMethod(method) && !observeMutating) {
-            recordSkip(request, method + " " + url,
-                    "Yan etkili istek, kullanıcı onayı (observeMutating) verilmediği için gönderilmedi.");
-            return SECTION_TITLE + " NOTE\n"
-                    + "İstek " + method + " (yan etkili) olduğu için otomatik gözlem koşumu YAPILMADI. "
-                    + "Bu, hedefin erişilemez olduğu ANLAMINA GELMEZ — istek hiç gönderilmedi. "
-                    + "Gerçek yanıtla üretim için Runner ekranındaki 'Yanıttan Test Üret' akışını kullanın "
-                    + "ya da isteği observeMutating=true ile gönderin. "
-                    + "Ajanlar: hedefin durumu hakkında ÇIKARIM YAPMAYIN.";
-        }
 
         Observed observed = send(parsed);
         if (!observed.ok()) {

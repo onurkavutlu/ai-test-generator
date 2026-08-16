@@ -85,16 +85,15 @@ public class TestGenerationRequest {
     @Builder.Default
     private boolean autoGenerateOnFailure = false;
 
-    /**
-     * Yan etkili bir isteğin (POST/PUT/DELETE/PATCH) gözlem aşamasında GERÇEKTEN
-     * gönderilmesine kullanıcı açıkça izin verdi mi?
-     *
-     * <p>Varsayılan {@code false}: araç, kullanıcının haberi olmadan hedef sisteme yan
-     * etkili istek atmaz. Ancak onay yoksa üretim de <b>ölçüme dayanmaz</b>; bu durumda
-     * tahminle test üretmek yerine üretim reddedilir.
-     */
-    @Builder.Default
-    private boolean observeMutating = false;
+    // NOT: Burada kısa süre `observeMutating` alanı vardı — yan etkili isteklerin
+    // gözlemlenmesi için kullanıcı onayı isteniyordu. Kaldırıldı: isteği kullanıcı
+    // zaten kendisi veriyor, onay istemek Postman'de Send'e bastıktan sonra "emin
+    // misin" diye sormak gibiydi. Onay kuralı isteğin metoduna değil KAYNAĞINA bağlı
+    // ve doğru yerde uygulanıyor (Swagger taraması yalnızca yan etkisiz problar).
+    //
+    // Veritabanındaki observe_mutating sütunu duruyor; Hibernate `update` sütun
+    // düşürmez ve düşürmek için yeni bir şema göçü gerekirdi. Sütunun varsayılanı
+    // false, kimse yazmıyor, kimse okumuyor — zararsız.
 
     // ── Gözlem kanıtı ────────────────────────────────────────────────────────
     // Üretilen her assertion'ın dayanağı. Saklanmazsa kullanıcı, testin neye göre

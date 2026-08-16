@@ -103,8 +103,21 @@ public class ObservationServiceTest {
         assertTrue(ctx.contains("Pamuk"));
     }
 
+    /**
+     * Onay kuralı isteğin METODUNA değil KAYNAĞINA bağlıdır.
+     *
+     * <p>Kullanıcının kendi yapıştırdığı istek, DELETE bile olsa gönderilir — "bu isteğe
+     * test yaz" demenin başka bir anlamı yok; Postman'de Send'e basmakla aynı şey. Bir
+     * dönem burada metot bazlı onay kapısı vardı: hiçbir şeyi güvenli hâle getirmedi,
+     * yalnızca kullanıcının kendi verdiği isteği gözlemlemesini engelledi ve üretim
+     * ölçümsüz kaldı.
+     *
+     * <p>Aracın KENDİ keşfettiği uçlar için kural farklıdır ve yerinde durur — bkz.
+     * {@link #swaggerObservationProbesParameterlessGetEndpoints()}: orada kullanıcı o
+     * çağrıları hiç istememiştir, bu yüzden yalnızca yan etkisiz problar atılır.
+     */
     @Test
-    public void mutatingCurlIsNotExecutedAutomatically() {
+    public void userSuppliedMutatingCurlIsExecuted() {
         int before = mutationHits.get();
         TestGenerationRequest req = TestGenerationRequest.builder()
                 .testType(TestType.BACKEND_API).framework(TestFramework.KARATE)
@@ -113,9 +126,10 @@ public class ObservationServiceTest {
 
         String ctx = service.enrichWithObservations(req);
 
-        assertEquals(before, mutationHits.get(), "Mutasyonlu istek otomatik koşulmamalı");
-        assertTrue(ctx.contains("## OBSERVED NOTE"));
-        assertTrue(ctx.contains("Yanıttan Test Üret"));
+        assertEquals(before + 1, mutationHits.get(),
+                "Kullanıcının kendi verdiği istek gönderilmedi");
+        assertTrue(ctx.contains("## OBSERVED RESPONSE"), ctx);
+        assertTrue(ctx.contains("DELETE"), ctx);
     }
 
     @Test

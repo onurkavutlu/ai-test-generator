@@ -1,7 +1,6 @@
 package com.testgen.service;
 
-import com.testgen.generator.KarateTestGenerator;
-import com.testgen.generator.SeleniumTestGenerator;
+import com.testgen.generator.FrameworkTestGeneratorRegistry;
 import com.testgen.model.*;
 import com.testgen.repository.GeneratedTestCaseRepository;
 import com.testgen.repository.TestGenerationRequestRepository;
@@ -24,13 +23,7 @@ import static org.mockito.Mockito.*;
 public class TestGenerationServiceTest {
 
     @Mock
-    private KarateTestGenerator karateTestGenerator;
-
-    @Mock
-    private SeleniumTestGenerator seleniumTestGenerator;
-
-    @Mock
-    private com.testgen.generator.RestAssuredTestGenerator restAssuredTestGenerator;
+    private FrameworkTestGeneratorRegistry frameworkGenerators;
 
     @Mock
     private TestGenerationRequestRepository requestRepository;
@@ -96,7 +89,7 @@ public class TestGenerationServiceTest {
                 .thenReturn("API context\n\n## AI AGENT ANALYSIS\n### Product Manager Agent\nacceptance criteria");
         when(aiTestDataGenerationService.enrichAdditionalContext(request))
                 .thenReturn("API context\n\n## AI-GENERATED TEST DATA\n[]");
-        when(karateTestGenerator.generate(request)).thenReturn(List.of(testCase));
+        when(frameworkGenerators.generate(request)).thenReturn(List.of(testCase));
         when(requestRepository.save(any(TestGenerationRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CompletableFuture<List<GeneratedTestCase>> future = testGenerationService.generateTests("req-123");
@@ -128,7 +121,7 @@ public class TestGenerationServiceTest {
         when(requestRepository.findById("req-123")).thenReturn(Optional.of(request));
         when(aiAgentOrchestratorService.enrichAdditionalContext(request)).thenReturn("## AI AGENT ANALYSIS\n### Product Manager Agent\nacceptance criteria");
         when(aiTestDataGenerationService.enrichAdditionalContext(request)).thenReturn("## AI-GENERATED TEST DATA\n[]");
-        when(karateTestGenerator.generate(request)).thenReturn(new ArrayList<>());
+        when(frameworkGenerators.generate(request)).thenReturn(new ArrayList<>());
 
         assertThrows(TestGenerationException.class, () -> {
             try {

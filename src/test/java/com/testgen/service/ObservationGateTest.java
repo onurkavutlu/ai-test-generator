@@ -95,32 +95,36 @@ class ObservationGateTest {
                 + "  </soapenv:Body>\n</soapenv:Envelope>'";
     }
 
-    private static TestGenerationRequest request(boolean consent) {
+    private static TestGenerationRequest request() {
         return TestGenerationRequest.builder()
                 .testType(TestType.BACKEND_API).framework(TestFramework.KARATE)
                 .rawPayload(soapCurl()).payloadType("CURL")
-                .observeMutating(consent)
                 .build();
     }
 
+    /**
+     * Kullanıcının verdiği istek, metoduna bakılmaksızın gönderilir.
+     *
+     * <p>Bir dönem POST/DELETE için onay kapısı vardı. Kaldırıldı: isteği kullanıcı
+     * zaten kendisi yapıştırıyor — onay istemek, Postman'de Send'e bastıktan sonra
+     * "emin misin" diye sormak gibiydi. Tek sonucu, kullanıcının kendi verdiği isteği
+     * gözlemleyememesi ve üretimin ölçümsüz kalmasıydı.
+     */
     @Test
-    @DisplayName("Onay yokken yan etkili istek GÖNDERİLMEZ ve 'erişilemedi' denmez")
-    void withoutConsentNothingIsSentAndNoWrongConclusion() {
+    @DisplayName("Kullanıcının verdiği POST, onay istemeden gönderilir")
+    void userSuppliedRequestIsSentRegardlessOfMethod() {
         int before = postHits.get();
 
-        String ctx = service.enrichWithObservations(request(false));
+        String ctx = service.enrichWithObservations(request());
 
-        assertEquals(before, postHits.get(), "Onaysız yan etkili istek gönderildi");
-        assertFalse(ObservationService.isObserved(ctx), "Not, gözlem sayıldı");
-        // En kritik nokta: ajanlar 'erişilemez' çıkarımı yapmasın diye açıkça yazılır.
-        assertTrue(ctx.contains("hedefin erişilemez olduğu ANLAMINA GELMEZ"), ctx);
-        assertTrue(ctx.contains("ÇIKARIM YAPMAYIN"), ctx);
+        assertEquals(before + 1, postHits.get(), "Kullanıcının verdiği istek gönderilmedi");
+        assertTrue(ObservationService.isObserved(ctx), ctx);
     }
 
     @Test
-    @DisplayName("Onay verilince isteğin AYNISI gider: POST, başlıklar ve gövde")
-    void withConsentTheExactRequestIsSent() {
-        String ctx = service.enrichWithObservations(request(true));
+    @DisplayName("İsteğin AYNISI gider: POST, başlıklar ve gövde")
+    void theExactRequestIsSent() {
+        String ctx = service.enrichWithObservations(request());
 
         assertEquals("POST", lastMethod.get(),
                 "-X yokken metot GET sanıldı — yanlış istek gönderildi");
@@ -140,7 +144,7 @@ class ObservationGateTest {
     @Test
     @DisplayName("Gözlenen süre bağlama yazılır — SLA ancak ölçümden türetilebilir")
     void measuredDurationIsRecorded() {
-        String ctx = service.enrichWithObservations(request(true));
+        String ctx = service.enrichWithObservations(request());
 
         assertTrue(ctx.contains("Gözlenen Süre"), ctx);
         assertTrue(ctx.contains("Ölçülmemiş SLA yazma"), ctx);
