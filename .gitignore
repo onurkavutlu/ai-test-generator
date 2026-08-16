@@ -36,6 +36,8 @@ graphify-out/
 generated-tests/
 selenium_tests/
 surefire-reports/
+docs/test-reports/*.md
+!docs/test-reports/README.md
 
 # OS
 .DS_Store
