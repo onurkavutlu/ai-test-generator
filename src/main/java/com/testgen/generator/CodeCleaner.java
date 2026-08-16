@@ -521,7 +521,7 @@ public final class CodeCleaner {
 
         if (expectedClassName != null && !expectedClassName.isBlank()) {
             String actual = extractClassName(result);
-            if (!actual.equals(expectedClassName) && !actual.startsWith("GeneratedTest_")) {
+            if (!actual.equals(expectedClassName)) {
                 result = result.replaceAll("\\b" + Pattern.quote(actual) + "\\b", expectedClassName);
             }
         }

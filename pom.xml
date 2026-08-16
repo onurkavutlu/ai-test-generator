@@ -29,14 +29,18 @@
         <!-- Kapsam alt sınırı. Regresyon kilidi: bu eşiğin altına düşen build KIRILIR.
              Test kapsamı arttıkça kademeli yükseltilir. -->
         <!--
-            Ölçülen değerler (dışlamalar sonrası): satır %74, dal %60.
+            Ölçülen değerler (dışlamalar sonrası): satır yaklaşık %77, dal %62.
             Eşikler bunun hemen ALTINA konur — amaç mevcut seviyeyi kilitlemek ve
             regresyonu kırmak; tam ölçüme eşitlemek, ilgisiz bir refaktörde tek satırlık
             dalgalanmayı bile build hatasına çevirip kapıyı gürültü kaynağı yapardı.
             Kapsam arttıkça bu değerler yükseltilir.
         -->
-        <jacoco.line.coverage.min>0.72</jacoco.line.coverage.min>
-        <jacoco.branch.coverage.min>0.58</jacoco.branch.coverage.min>
+        <jacoco.line.coverage.min>0.75</jacoco.line.coverage.min>
+        <jacoco.branch.coverage.min>0.60</jacoco.branch.coverage.min>
+
+        <!-- Canlı internete bağlı testler deterministik kalite kapısının parçası değildir.
+             -Pexternal-tests profili bu dışlamayı kaldırıp onları açıkça çalıştırır. -->
+        <test.excluded.groups>external</test.excluded.groups>
 
         <!-- ── Karate: groupId io.karatelabs for modern JDK compatibility ── -->
         <karate.version>1.5.2</karate.version>
@@ -305,6 +309,28 @@
                 </configuration>
             </plugin>
 
+            <!-- Projenin desteklenen çalışma/derleme JDK'sı yalnız Java 17'dir.
+                 source/target tek başına Maven'in Java 26 ile çalışmasını engellemez. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-java-17</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[17,18)</version>
+                                    <message>Bu proje yalnız Java 17 ile derlenir ve test edilir. JAVA_HOME değerini JDK 17 olarak ayarlayın.</message>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -333,6 +359,7 @@
                     <systemPropertyVariables>
                         <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
                     </systemPropertyVariables>
+                    <excludedGroups>${test.excluded.groups}</excludedGroups>
                 </configuration>
             </plugin>
 
@@ -386,6 +413,36 @@
                                         </limit>
                                     </limits>
                                 </rule>
+                                <!-- Faz 1 framework sağlamlaştırması: kapsamı %90'a ulaşan
+                                     çekirdek bileşen tekrar bu seviyenin altına düşemez. -->
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com.testgen.generator.RestAssuredTestGenerator</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <!-- Agent mimarisi için ayrı regresyon kapısı: registry,
+                                     routing, tool sınırı ve LLM agent sözleşmeleri. -->
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <includes>
+                                        <include>com.testgen.agent</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
                             </rules>
                             <excludes>
                                 <!-- Veri taşıyıcıları ve Spring giriş noktası: davranış içermez,
@@ -400,4 +457,26 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>external-tests</id>
+            <properties>
+                <test.excluded.groups></test.excluded.groups>
+            </properties>
+            <build>
+                <plugins>
+                    <!-- Canlı test ölçümü ana suite'in jacoco.exec dosyasını ezmez. -->
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <configuration>
+                            <destFile>${project.build.directory}/jacoco-external.exec</destFile>
+                            <dataFile>${project.build.directory}/jacoco-external.exec</dataFile>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

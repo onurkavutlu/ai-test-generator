@@ -5,7 +5,14 @@ import com.testgen.llm.PromptTemplates;
 import com.testgen.model.GeneratedTestCase;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestGenerationRequest;
+import com.testgen.parser.ApiCollectionParser;
+import com.testgen.parser.CurlParser;
+import com.testgen.parser.GraphQLParser;
+import com.testgen.parser.HarFileParser;
+import com.testgen.parser.ParsedRequestDto;
+import com.testgen.parser.SoapXmlParser;
 import com.testgen.runner.GeneratedJavaTestProjectService;
+import com.testgen.service.TestGenerationException;
 import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.PathItem;
@@ -15,8 +22,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * REST Assured (JUnit 5) test üreticisi.
@@ -26,16 +35,34 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class RestAssuredTestGenerator {
+public class RestAssuredTestGenerator implements FrameworkTestGenerator {
 
     private final LlmService llmService;
     private final GeneratedJavaTestProjectService javaTestProjectService;
     private final GenerationLimit generationLimit;
+    private final CurlParser curlParser;
+    private final ApiCollectionParser apiCollectionParser;
+    private final HarFileParser harFileParser;
+    private final GraphQLParser graphQLParser;
+    private final SoapXmlParser soapXmlParser;
 
+    @Override
+    public TestFramework framework() {
+        return TestFramework.REST_ASSURED;
+    }
+
+    @Override
     public List<GeneratedTestCase> generate(TestGenerationRequest request) {
         List<GeneratedTestCase> results = new ArrayList<>();
 
-        if (request.getSwaggerUrl() != null && !request.getSwaggerUrl().isBlank()) {
+        if (request.getRawPayload() != null && !request.getRawPayload().isBlank()) {
+            results.addAll(generateFromRawPayload(request));
+            ObservedApiTestBuilder.buildRestAssuredCase(request.getAdditionalContext())
+                    .ifPresent(tc -> {
+                        saveToFile(tc.getFileName(), tc.getTestContent());
+                        results.add(tc);
+                    });
+        } else if (request.getSwaggerUrl() != null && !request.getSwaggerUrl().isBlank()) {
             results.addAll(generateFromSwagger(request));
         } else {
             results.add(generateFromUserStory(request));
@@ -52,6 +79,142 @@ public class RestAssuredTestGenerator {
         return results;
     }
 
+    /**
+     * cURL/CAPTURED, Postman Collection ve HAR girdisini gerçek yapılandırılmış
+     * alanlarıyla REST Assured'a taşır.
+     * Ayrıştırılamayan raw içerik user-story testine düşmez; o davranış gerçek endpoint,
+     * metot ve gövdeyi kaybederek ilgisiz bir test üretiyordu.
+     */
+    private List<GeneratedTestCase> generateFromRawPayload(TestGenerationRequest request) {
+        String payloadType = request.getPayloadType();
+        String normalizedType = payloadType == null || payloadType.isBlank()
+                ? "CURL"
+                : payloadType.strip().toUpperCase(java.util.Locale.ROOT);
+
+        List<ParsedRequestDto> parsedRequests;
+        String sourceLabel;
+        switch (normalizedType) {
+            case "CURL", "CAPTURED" -> {
+                ParsedRequestDto parsed = curlParser.parse(request.getRawPayload());
+                parsedRequests = parsed == null ? List.of() : List.of(parsed);
+                sourceLabel = "cURL";
+            }
+            case "API_COLLECTION" -> {
+                parsedRequests = apiCollectionParser.parse(request.getRawPayload());
+                sourceLabel = "Postman Collection";
+            }
+            case "HAR" -> {
+                parsedRequests = harFileParser.parse(request.getRawPayload());
+                sourceLabel = "HAR";
+            }
+            case "GRAPHQL" -> {
+                String endpoint = ExplicitEndpointValidator.requireHttpUrl(request, "GraphQL");
+                parsedRequests = applyEndpoint(graphQLParser.parse(request.getRawPayload()), endpoint);
+                sourceLabel = "GraphQL";
+            }
+            case "SOAP" -> {
+                String endpoint = ExplicitEndpointValidator.requireHttpUrl(request, "SOAP");
+                parsedRequests = applyEndpoint(soapXmlParser.parse(request.getRawPayload()), endpoint);
+                sourceLabel = "SOAP";
+            }
+            default -> throw new TestGenerationException("REST Assured raw payload tipi desteklenmiyor: "
+                    + payloadType
+                    + ". Desteklenen tipler: CURL, CAPTURED, API_COLLECTION, HAR, GRAPHQL, SOAP.");
+        }
+
+        if (parsedRequests.isEmpty()) {
+            throw new TestGenerationException("REST Assured " + sourceLabel
+                    + " girdisinden test edilebilir HTTP isteği ayrıştırılamadı.");
+        }
+
+        int limit = Math.min(generationLimit.resolve(request, parsedRequests.size()), parsedRequests.size());
+        List<GeneratedTestCase> cases = new ArrayList<>(limit);
+        Set<String> usedClassNames = new HashSet<>();
+        for (int index = 0; index < limit; index++) {
+            ParsedRequestDto parsed = parsedRequests.get(index);
+            validateParsedRequest(parsed, sourceLabel, index);
+            cases.add(generateFromParsedRequest(parsed, request, sourceLabel, index, usedClassNames));
+        }
+        return cases;
+    }
+
+    private List<ParsedRequestDto> applyEndpoint(List<ParsedRequestDto> parsedRequests, String endpoint) {
+        if (parsedRequests == null) {
+            return List.of();
+        }
+        return parsedRequests.stream()
+                .map(parsed -> new ParsedRequestDto(
+                        parsed.name(),
+                        parsed.method(),
+                        endpoint,
+                        parsed.payloadDetails(),
+                        parsed.headers(),
+                        parsed.body()))
+                .toList();
+    }
+
+    private GeneratedTestCase generateFromParsedRequest(
+            ParsedRequestDto parsed,
+            TestGenerationRequest request,
+            String sourceLabel,
+            int index,
+            Set<String> usedClassNames) {
+        String context = request.getAdditionalContext() != null ? request.getAdditionalContext() : "";
+        String prompt = PromptTemplates.buildRestAssuredRawPayloadPrompt(parsed, context);
+        String generatedContent = llmService.generateTestCase(prompt, "REST_ASSURED");
+
+        String path;
+        try {
+            path = java.net.URI.create(parsed.url()).getPath();
+        } catch (IllegalArgumentException e) {
+            path = parsed.url();
+        }
+        String className = buildClassName(path == null || path.isBlank() ? "/" : path, parsed.method());
+        if (!usedClassNames.add(className)) {
+            String baseName = className.endsWith("Test")
+                    ? className.substring(0, className.length() - "Test".length())
+                    : className;
+            int suffix = index + 1;
+            className = baseName + "Item" + suffix + "Test";
+            while (!usedClassNames.add(className)) {
+                suffix++;
+                className = baseName + "Item" + suffix + "Test";
+            }
+        }
+        String cleanContent = CodeCleaner.normalizeRestAssuredTest(
+                CodeCleaner.cleanJavaContent(generatedContent), className);
+
+        GeneratedTestCase testCase = GeneratedTestCase.builder()
+                .testName(className)
+                .fileName(className + ".java")
+                .testContent(cleanContent)
+                .testSummary("[AI-DATA][LLM-GENERATED] Ayrıştırılmış gerçek " + sourceLabel
+                        + " isteğinden REST Assured testi oluşturuldu.")
+                .framework(TestFramework.REST_ASSURED)
+                .build();
+        saveToFile(testCase.getFileName(), testCase.getTestContent());
+        return testCase;
+    }
+
+    private void validateParsedRequest(ParsedRequestDto parsed, String sourceLabel, int index) {
+        if (parsed == null || parsed.method() == null || parsed.method().isBlank()
+                || parsed.url() == null || parsed.url().isBlank()) {
+            throw new TestGenerationException("REST Assured " + sourceLabel + " girdisindeki "
+                    + (index + 1) + ". istek metot veya URL içermiyor.");
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(parsed.url());
+            String scheme = uri.getScheme();
+            if (uri.getHost() == null || scheme == null
+                    || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
+                throw new IllegalArgumentException("absolute HTTP(S) URL required");
+            }
+        } catch (IllegalArgumentException error) {
+            throw new TestGenerationException("REST Assured " + sourceLabel + " girdisindeki "
+                    + (index + 1) + ". istek geçerli mutlak HTTP(S) URL içermiyor: " + parsed.url());
+        }
+    }
+
     private List<GeneratedTestCase> generateFromSwagger(TestGenerationRequest request) {
         List<GeneratedTestCase> cases = new ArrayList<>();
         try {
@@ -64,8 +227,13 @@ public class RestAssuredTestGenerator {
                 return cases;
             }
 
-            // Karate ile aynı kural: maxCases verildiyse o sayıda endpoint'te dur
-            int limit = generationLimit.resolve(request, openAPI.getPaths().size());
+            // Limit path sayısına değil operasyon sayısına uygulanır. Aynı path altında
+            // GET + POST varsa ikisi ayrı test case'tir; path sayısını kullanmak ikinci
+            // operasyonu istek limiti verilmemişken bile sessizce eliyordu.
+            int operationCount = openAPI.getPaths().values().stream()
+                    .mapToInt(pathItem -> pathItem.readOperationsMap().size())
+                    .sum();
+            int limit = generationLimit.resolve(request, operationCount);
             outer:
             for (Map.Entry<String, PathItem> entry : openAPI.getPaths().entrySet()) {
                 String path = entry.getKey();

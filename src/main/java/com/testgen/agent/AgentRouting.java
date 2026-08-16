@@ -57,8 +57,8 @@ public final class AgentRouting {
     /** Değerli ama üretim için zorunlu olmayan ajanlar. */
     public static List<AiAgentRole> recommended(TestGenerationRequest request) {
         return request.getTestType() == TestType.FRONTEND_WEB
-                ? List.of(AiAgentRole.SECOPS, AiAgentRole.PERFORMANCE)
-                : List.of(AiAgentRole.PERFORMANCE);
+                ? List.of(AiAgentRole.SECOPS, AiAgentRole.PERFORMANCE, AiAgentRole.DEVOPS)
+                : List.of(AiAgentRole.PERFORMANCE, AiAgentRole.DEVOPS);
     }
 
     /** Bu istekte gerçekten koşacak ajanlar — koşum sırası korunur. */

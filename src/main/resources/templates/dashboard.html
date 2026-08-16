@@ -870,9 +870,26 @@
         </div>
       </div>
 
-      <div class="view-title-section" style="margin-top: 16px;">
-        <h3>Son LLM Çağrı Geçmişi</h3>
+      <div class="view-title-section" style="margin-top: 16px; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+        <h3 style="margin:0;">Son LLM Çağrı Geçmişi</h3>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <label style="font-size:12px; color:var(--text-muted);" for="llm-filter-request">İstek</label>
+          <select id="llm-filter-request" onchange="loadLlmCalls()"
+                  style="min-width:280px; padding:6px 8px; font-size:12px;">
+            <option value="">Tümü</option>
+          </select>
+          <label style="font-size:12px; color:var(--text-muted);" for="llm-filter-phase">Faz</label>
+          <select id="llm-filter-phase" onchange="loadLlmCalls()"
+                  style="min-width:160px; padding:6px 8px; font-size:12px;">
+            <option value="">Tümü</option>
+          </select>
+        </div>
       </div>
+
+      <!-- Seçili isteğin maliyeti: çağrı sayısı, toplam süre, tahmini token -->
+      <div id="llm-request-cost" style="display:none; margin-bottom:12px; padding:10px 14px;
+           border:1px solid rgba(255,255,255,0.08); border-radius:8px;
+           background:rgba(99,102,241,0.07); font-size:12.5px;"></div>
 
       <!-- LLM Call List Table -->
       <div class="table-container">
@@ -880,6 +897,8 @@
           <thead>
             <tr>
               <th>Zaman</th>
+              <th>İstek</th>
+              <th>Faz</th>
               <th>Tip</th>
               <th>Durum</th>
               <th>Süre (ms)</th>
@@ -889,7 +908,7 @@
           </thead>
           <tbody id="llm-calls-table-body">
             <tr>
-              <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 32px;">
+              <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 32px;">
                 Yükleniyor...
               </td>
             </tr>
@@ -1040,7 +1059,17 @@
                   </select>
                   <span style="font-size:11px;color:var(--text-dim);align-self:center;">Endpoint + request örneği ver, test bundan üretilip koşulur</span>
                 </div>
-                <textarea class="form-control" id="runner-rawPayload" rows="3" style="font-family:'JetBrains Mono',monospace;font-size:11.5px;" placeholder="curl -X POST https://api.example.com/v1/pets -H 'Content-Type: application/json' -d '{&quot;name&quot;:&quot;Boncuk&quot;}'"></textarea>
+                <textarea class="form-control" id="runner-rawPayload" rows="5" style="font-family:'JetBrains Mono',monospace;font-size:11.5px;" placeholder="curl -X POST https://api.example.com/v1/pets -H 'Content-Type: application/json' -d '{&quot;name&quot;:&quot;Boncuk&quot;}'"></textarea>
+                <div id="runner-curl-analysis" style="display:none;margin-top:8px;padding:10px 12px;border-radius:8px;
+                     border:1px solid rgba(99,102,241,.28);background:rgba(99,102,241,.07);">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span id="runner-curl-method" style="font-size:12px;font-weight:800;padding:3px 10px;border-radius:99px;
+                          background:rgba(99,102,241,.18);color:#a5b4fc;"></span>
+                    <span id="runner-curl-reason" style="font-size:11.5px;color:var(--text-muted);"></span>
+                  </div>
+                  <div id="runner-curl-url" style="margin-top:7px;font:11px 'JetBrains Mono',monospace;color:#cbd5e1;
+                       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+                </div>
               </div>
 
               <div class="form-group" style="margin:0;">
@@ -1166,6 +1195,11 @@
           </div>
 
           <!-- Test Cases Listesi -->
+          <!-- GÖZLENEN YANIT: üretilen her assertion'ın dayanağı.
+               Case'lerin ÜSTÜNDE durur — kullanıcı testlere bakmadan önce neye
+               dayandıklarını görsün. Gözlem yapılamadıysa nedeni burada yazar. -->
+          <div id="runner-observed-section" style="display:none; margin-bottom:14px;"></div>
+
           <div id="runner-cases-section" style="display:none;">
             <div class="code-container" style="height:auto;">
               <div class="code-container-header" style="justify-content:space-between;">
@@ -1180,7 +1214,7 @@
           <div id="runner-response-section" style="display:none;">
             <div class="code-container" style="height:auto;">
               <div class="code-container-header">
-                <span style="font-size:13px;font-weight:600;color:#e2e8f0;">📥 Response</span>
+                <span style="font-size:13px;font-weight:600;color:#e2e8f0;">📨 Üretim İşlem Yanıtı</span>
               </div>
               <pre class="code-content-pre" style="max-height:240px;overflow:auto;"><code id="runner-response-body" style="font-size:11px;"></code></pre>
             </div>
@@ -1685,25 +1719,69 @@
         .catch(err => console.error("LLM özet rapor alınamadı:", err));
     }
 
+    /**
+     * LLM çağrı geçmişi.
+     *
+     * Önceden tablo yalnızca zaman/tip/süre gösteriyordu: 15 çağrı listeleniyor ama
+     * hiçbirinin HANGİ üretim isteğine ait olduğu görünmüyordu. Aynı anda iki üretim
+     * koştuğunda maliyet ayrıştırılamıyordu. Artık her satır isteğe ve faza bağlı;
+     * istek seçildiğinde o üretimin toplam maliyeti ayrıca gösterilir.
+     */
+    const LLM_PHASE_LABELS = {
+      GENERATION:        'Üretim',
+      VALIDATION_REPAIR: 'Doğrulama onarımı',
+      SELF_HEAL:         'Self-healing',
+      BENCHMARK:         'Kıyaslama',
+      RUNNER:            'Runner'
+    };
+
+    function llmFilterValue(id) {
+      const el = document.getElementById(id);
+      return el ? el.value : '';
+    }
+
     function loadLlmCalls() {
-      fetch('/api/v1/llm/calls')
+      const reqFilter   = llmFilterValue('llm-filter-request');
+      const phaseFilter = llmFilterValue('llm-filter-phase');
+      const url = reqFilter ? `/api/v1/llm/calls?requestId=${encodeURIComponent(reqFilter)}`
+                            : '/api/v1/llm/calls';
+
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           const tbody = document.getElementById('llm-calls-table-body');
-          if (data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 32px;">Model çağrı geçmişi bulunamadı.</td></tr>`;
+          llmSyncFilterOptions(data, reqFilter, phaseFilter);
+
+          const rows = phaseFilter ? data.filter(c => c.phase === phaseFilter) : data;
+          llmRenderCost(reqFilter, rows);
+
+          if (rows.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 32px;">Bu filtreyle eşleşen çağrı yok.</td></tr>`;
             return;
           }
+
           tbody.innerHTML = '';
-          const sorted = [...data].reverse().slice(0, 15); // Show last 15 calls
-          sorted.forEach(c => {
+          [...rows].reverse().slice(0, 50).forEach(c => {
             const statusBadge = c.success
               ? '<span class="badge badge-success">Başarılı</span>'
               : '<span class="badge badge-danger">Hata</span>';
             const date = new Date(c.calledAt).toLocaleTimeString('tr-TR');
+
+            // Korelasyon yoksa uydurulmaz; açıkça "yok" yazılır.
+            const reqCell = c.requestId
+              ? `<a href="#" onclick="llmFilterByRequest('${c.requestId}');return false;"
+                    title="${c.requestId}" style="font-family:monospace;">${c.requestId.substring(0,8)}</a>`
+              : '<span style="color:var(--text-dim);" title="Bu çağrı bir üretim isteği bağlamı dışında yapıldı">—</span>';
+
+            const phaseCell = c.phase
+              ? `<span class="badge">${LLM_PHASE_LABELS[c.phase] || c.phase}</span>`
+              : '<span style="color:var(--text-dim);">—</span>';
+
             tbody.innerHTML += `
               <tr>
                 <td>${date}</td>
+                <td>${reqCell}</td>
+                <td>${phaseCell}</td>
                 <td><span class="badge badge-primary">${c.callType}</span></td>
                 <td>${statusBadge}</td>
                 <td>${c.durationMs} ms</td>
@@ -1716,6 +1794,62 @@
           });
         })
         .catch(err => console.error("LLM çağrı detayları yüklenemedi:", err));
+    }
+
+    function llmFilterByRequest(requestId) {
+      const sel = document.getElementById('llm-filter-request');
+      if (!sel) return;
+      if (![...sel.options].some(o => o.value === requestId)) {
+        sel.add(new Option(requestId.substring(0, 8) + '…', requestId));
+      }
+      sel.value = requestId;
+      loadLlmCalls();
+    }
+
+    /** Filtre listelerini gelen veriden türetir; seçili değer korunur. */
+    function llmSyncFilterOptions(data, reqFilter, phaseFilter) {
+      const reqSel = document.getElementById('llm-filter-request');
+      // İstek listesi yalnızca filtresiz çekimde tazelenir; filtreliyken liste daralmasın.
+      if (reqSel && !reqFilter) {
+        const ids = [...new Set(data.map(c => c.requestId).filter(Boolean))].reverse();
+        reqSel.innerHTML = '<option value="">Tümü</option>';
+        ids.forEach(id => reqSel.add(new Option(id.substring(0, 8) + '…', id)));
+        reqSel.value = '';
+      }
+      const phSel = document.getElementById('llm-filter-phase');
+      if (phSel) {
+        const phases = [...new Set(data.map(c => c.phase).filter(Boolean))];
+        phSel.innerHTML = '<option value="">Tümü</option>';
+        phases.forEach(p => phSel.add(new Option(LLM_PHASE_LABELS[p] || p, p)));
+        phSel.value = phases.includes(phaseFilter) ? phaseFilter : '';
+      }
+    }
+
+    /** Seçili isteğin ölçülen maliyeti — tahmin değil, kaydedilen değerlerin toplamı. */
+    function llmRenderCost(requestId, rows) {
+      const box = document.getElementById('llm-request-cost');
+      if (!box) return;
+      if (!requestId || rows.length === 0) {
+        box.style.display = 'none';
+        return;
+      }
+      const totalMs   = rows.reduce((s, c) => s + (c.durationMs || 0), 0);
+      const promptTok = rows.reduce((s, c) => s + (c.estimatedPromptTokens || 0), 0);
+      const respTok   = rows.reduce((s, c) => s + (c.estimatedResponseTokens || 0), 0);
+      const failed    = rows.filter(c => !c.success).length;
+      const byPhase   = rows.reduce((acc, c) => {
+        const k = LLM_PHASE_LABELS[c.phase] || c.phase || 'bilinmiyor';
+        acc[k] = (acc[k] || 0) + 1; return acc;
+      }, {});
+      const phaseText = Object.entries(byPhase).map(([k, v]) => `${k}: ${v}`).join(' · ');
+
+      box.style.display = '';
+      box.innerHTML =
+        `<b style="font-family:monospace;">${requestId}</b> &nbsp;—&nbsp; ` +
+        `<b>${rows.length}</b> çağrı${failed ? ` (<span style="color:#ef4444;">${failed} hata</span>)` : ''} · ` +
+        `toplam <b>${(totalMs / 1000).toFixed(1)} sn</b> · ` +
+        `~<b>${promptTok + respTok}</b> token (prompt ${promptTok} / yanıt ${respTok})` +
+        (phaseText ? `<br><span style="color:var(--text-dim);">${phaseText}</span>` : '');
     }
 
     // Modal Details Panel Controllers
@@ -2728,6 +2862,43 @@
       }
     }
 
+    let runnerCurlAnalysisTimer = null;
+
+    function runnerScheduleCurlAnalysis() {
+      clearTimeout(runnerCurlAnalysisTimer);
+      runnerCurlAnalysisTimer = setTimeout(() => runnerAnalyzeCurl(false), 350);
+    }
+
+    async function runnerAnalyzeCurl(showError) {
+      const panel = document.getElementById('runner-curl-analysis');
+      const raw = document.getElementById('runner-rawPayload').value.trim();
+      const type = document.getElementById('runner-payloadType').value;
+      if (type !== 'CURL' || !raw) {
+        panel.style.display = 'none';
+        return null;
+      }
+
+      try {
+        const res = await fetch('/api/v1/runner/parse-curl', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ curl: raw })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'cURL ayrıştırılamadı');
+
+        document.getElementById('runner-curl-method').textContent = data.method;
+        document.getElementById('runner-curl-reason').textContent = 'Algılandı — ' + data.methodReason;
+        document.getElementById('runner-curl-url').textContent = data.url;
+        panel.style.display = '';
+        return data;
+      } catch (e) {
+        panel.style.display = 'none';
+        if (showError) showToast(e.message, false);
+        return null;
+      }
+    }
+
     function runnerBuildPayload() {
       const rawPayload = document.getElementById('runner-rawPayload').value.trim();
       return {
@@ -2783,12 +2954,13 @@
         document.getElementById(id).value = '';
       });
       document.getElementById('runner-testType').value = 'BACKEND_API';
+      document.getElementById('runner-curl-analysis').style.display = 'none';
       runnerAdaptFramework();
       runnerHideResults();
     }
 
     function runnerHideResults() {
-      ['runner-status-bar','runner-perf-section','runner-cases-section','runner-response-section']
+      ['runner-status-bar','runner-perf-section','runner-cases-section','runner-response-section','runner-observed-section']
         .forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
       if (runnerPollTimer) { clearInterval(runnerPollTimer); runnerPollTimer = null; }
     }
@@ -2799,6 +2971,11 @@
       const autoRun = document.getElementById('runner-autoRun').checked;
       const payload = runnerBuildPayload();
       const btn     = document.getElementById('runner-send-btn');
+
+      if (payload.rawPayload && payload.payloadType === 'CURL') {
+        const parsed = await runnerAnalyzeCurl(true);
+        if (!parsed) return;
+      }
 
       const contentType = fmt === 'xml' ? 'application/xml' : 'application/json';
       const body        = fmt === 'xml' ? runnerPayloadToXml(payload) : JSON.stringify(payload);
@@ -2863,6 +3040,12 @@
           const badge = document.getElementById('runner-status-badge');
           runnerSetStatusBadge(badge, data.status);
 
+          // Gözlem üretimden önce tamamlanır; gerçek response'u LLM üretimini
+          // bekletmeden Postman benzeri panelde göster.
+          if (data.observedStatus != null || data.observationSkipReason) {
+            runnerRenderObservation(data);
+          }
+
           if (data.status === 'GENERATED' || data.status === 'FAILED') {
             clearInterval(runnerPollTimer);
             runnerPollTimer = null;
@@ -2872,7 +3055,155 @@
       }, 2500);
     }
 
+    /**
+     * Gözlenen yanıtı ekrana basar.
+     *
+     * ÖLÇÜLEN ARIZA: gözlem başarısız olduğunda kullanıcı bunu HİÇ göremiyordu;
+     * ekranda yalnızca üretilen case'ler vardı ve testlerin neye dayandığı belirsizdi.
+     * Üretim ölçüme dayanmadığında bunun ekranda görünmesi şart.
+     */
+    function runnerRenderObservation(req) {
+      const box = document.getElementById('runner-observed-section');
+      if (!box) return;
+
+      if (req.observationSkipReason) {
+        box.style.display = '';
+        box.innerHTML = `
+          <div style="border:1px solid rgba(245,158,11,0.35); background:rgba(245,158,11,0.08);
+                      border-radius:8px; padding:12px 14px;">
+            <div style="font-weight:600; color:#f59e0b; margin-bottom:6px;">⚠️ Gözlem yapılamadı</div>
+            <div style="font-size:12.5px; color:var(--text-muted);">
+              ${req.observedRequestLine ? `<div style="font-family:monospace; margin-bottom:4px;">${req.observedRequestLine}</div>` : ''}
+              ${req.observationSkipReason}
+            </div>
+            <div style="font-size:12px; color:var(--text-dim); margin-top:8px;">
+              Üretim ölçülmüş veriye dayanmıyor. Yan etkili istekler için
+              Nedeni yukarıda; hedefe erişimi doğrulayıp tekrar deneyin.
+            </div>
+          </div>`;
+        return;
+      }
+
+      if (req.observedStatus == null) {
+        box.style.display = 'none';
+        return;
+      }
+
+      const ok = req.observedStatus >= 200 && req.observedStatus < 400;
+      const body = prettyPrintResponse(req.observedBody || '(boş)', req.observedResponseHeaders || '');
+      const headers = req.observedResponseHeaders || '';
+      const cookies = req.observedResponseCookies || '';
+      const headerCount = headers ? headers.split('\n').filter(Boolean).length : 0;
+      const cookieCount = cookies ? cookies.split('\n').filter(Boolean).length : 0;
+      const httpVersion = (req.observedHttpVersion || 'HTTP').replace('HTTP_', 'HTTP/').replace('_', '.');
+      box.style.display = '';
+      box.innerHTML = `
+        <div class="code-container" style="height:auto;border-color:${ok ? 'rgba(16,185,129,.32)' : 'rgba(245,158,11,.36)'};">
+          <div class="code-container-header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;">
+            <span style="font-size:13px;font-weight:700;color:#e2e8f0;">📥 Gerçek API Response</span>
+            <span class="badge ${ok ? 'badge-success' : 'badge-danger'}">HTTP ${req.observedStatus}</span>
+            <span style="font-size:11.5px;color:var(--text-muted);">⏱ ${req.observedDurationMs ?? '-'} ms</span>
+            <span style="font-size:11.5px;color:var(--text-muted);">↓ ${formatResponseBytes(req.observedResponseSizeBytes)}</span>
+            <span style="font-size:11.5px;color:var(--text-muted);">${httpVersion}</span>
+            <button class="btn btn-secondary" style="margin-left:auto;padding:3px 9px;font-size:10.5px;"
+                    onclick="runnerCopyObservedPane()">Kopyala</button>
+          </div>
+          <div style="padding:10px 14px;border-bottom:1px solid var(--border-color);font:11px 'JetBrains Mono',monospace;
+                      color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${escapeHtml(req.observedRequestLine || '')}
+          </div>
+          <div style="display:flex;gap:4px;padding:8px 12px 0;border-bottom:1px solid var(--border-color);">
+            <button class="runner-response-tab" data-tab="body" onclick="runnerObservationTab('body',this)"
+                    style="padding:7px 12px;border:0;border-bottom:2px solid #6366f1;background:transparent;color:#e2e8f0;cursor:pointer;">Body</button>
+            <button class="runner-response-tab" data-tab="headers" onclick="runnerObservationTab('headers',this)"
+                    style="padding:7px 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--text-muted);cursor:pointer;">Headers (${headerCount})</button>
+            <button class="runner-response-tab" data-tab="cookies" onclick="runnerObservationTab('cookies',this)"
+                    style="padding:7px 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--text-muted);cursor:pointer;">Cookies (${cookieCount})</button>
+          </div>
+          <div id="runner-response-pane-body" class="runner-response-pane">
+            <pre style="margin:0;max-height:480px;overflow:auto;padding:16px;background:#070b14;color:#dbeafe;
+                        font:11.5px/1.65 'JetBrains Mono',monospace;white-space:pre;tab-size:2;"><code>${escapeHtml(body)}</code></pre>
+          </div>
+          <div id="runner-response-pane-headers" class="runner-response-pane" style="display:none;">
+            <pre style="margin:0;max-height:380px;overflow:auto;padding:16px;background:#070b14;color:#cbd5e1;
+                        font:11.5px/1.65 'JetBrains Mono',monospace;white-space:pre-wrap;"><code>${escapeHtml(headers || 'Response header dönmedi.')}</code></pre>
+          </div>
+          <div id="runner-response-pane-cookies" class="runner-response-pane" style="display:none;">
+            <pre style="margin:0;max-height:300px;overflow:auto;padding:16px;background:#070b14;color:#cbd5e1;
+                        font:11.5px/1.65 'JetBrains Mono',monospace;white-space:pre-wrap;"><code>${escapeHtml(cookies || 'Bu response Set-Cookie header\'ı döndürmedi.')}</code></pre>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);padding:9px 14px;border-top:1px solid var(--border-color);">
+            Testler bu ölçülmüş yanıta göre üretildi; bu panel ayrı bir HTTP çağrısı yapmaz.
+          </div>
+        </div>`;
+    }
+
+    function formatResponseBytes(value) {
+      if (value == null) return '-';
+      if (value < 1024) return value + ' B';
+      if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KB';
+      return (value / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function prettyPrintResponse(body, headers) {
+      if (!body || body === '(boş)') return body || '(boş)';
+      const contentType = String(headers || '').toLowerCase();
+      if (contentType.includes('json') || /^[\s]*[\[{]/.test(body)) {
+        try { return JSON.stringify(JSON.parse(body), null, 2); } catch (e) { /* ham göster */ }
+      }
+      if (contentType.includes('xml') || /^[\s]*</.test(body)) return prettyPrintXml(body);
+      return body;
+    }
+
+    function prettyPrintXml(xml) {
+      try {
+        const parsed = new DOMParser().parseFromString(xml, 'application/xml');
+        if (parsed.querySelector('parsererror')) return xml;
+        const serialized = new XMLSerializer().serializeToString(parsed);
+        const lines = serialized.replace(/>\s*</g, '><').replace(/(>)(<)(\/*)/g, '$1\n$2$3').split('\n');
+        let depth = 0;
+        return lines.map(line => {
+          if (/^<\//.test(line)) depth = Math.max(0, depth - 1);
+          const out = '  '.repeat(depth) + line;
+          if (/^<[^!?/][^>]*[^/]>$/.test(line) && !/<\/[^>]+>$/.test(line)) depth++;
+          return out;
+        }).join('\n');
+      } catch (e) { return xml; }
+    }
+
+    function runnerObservationTab(name, button) {
+      document.querySelectorAll('.runner-response-pane').forEach(p => p.style.display = 'none');
+      document.querySelectorAll('.runner-response-tab').forEach(b => {
+        b.style.borderBottomColor = 'transparent';
+        b.style.color = 'var(--text-muted)';
+      });
+      const pane = document.getElementById('runner-response-pane-' + name);
+      if (pane) pane.style.display = '';
+      if (button) {
+        button.style.borderBottomColor = '#6366f1';
+        button.style.color = '#e2e8f0';
+      }
+    }
+
+    function runnerCopyObservedPane() {
+      const pane = Array.from(document.querySelectorAll('.runner-response-pane'))
+        .find(p => p.style.display !== 'none');
+      navigator.clipboard.writeText(pane ? pane.innerText : '');
+      showToast('Response içeriği kopyalandı.', true);
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
     async function runnerLoadResults(requestId) {
+      // Gözlem kanıtı — case'lerden ÖNCE gösterilir
+      try {
+        const res = await fetch('/api/v1/tests/' + requestId, { headers: { 'Accept': 'application/json' } });
+        runnerRenderObservation(await res.json());
+      } catch(e) {}
+
       // Test cases
       try {
         const res   = await fetch('/api/v1/tests/' + requestId + '/cases', { headers: { 'Accept': 'application/json' } });
@@ -3032,6 +3363,21 @@
         if (el) el.addEventListener('input', runnerUpdateBodyPreview);
         if (el) el.addEventListener('change', runnerUpdateBodyPreview);
       });
+      const rawPayload = document.getElementById('runner-rawPayload');
+      const payloadType = document.getElementById('runner-payloadType');
+      if (rawPayload) {
+        rawPayload.addEventListener('input', () => {
+          runnerUpdateBodyPreview();
+          runnerScheduleCurlAnalysis();
+        });
+      }
+      if (payloadType) {
+        payloadType.addEventListener('change', () => {
+          runnerUpdateBodyPreview();
+          runnerScheduleCurlAnalysis();
+        });
+      }
+      if (rawPayload && rawPayload.value.trim()) runnerScheduleCurlAnalysis();
       runnerUpdateBodyPreview();
     });
 

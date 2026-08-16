@@ -4,6 +4,7 @@ import com.testgen.config.BadRequestException;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestGenerationRequest;
 import com.testgen.model.TestType;
+import com.testgen.parser.CurlParser;
 import com.testgen.service.TestGenerationService;
 import com.testgen.service.TestSuiteService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,6 +39,7 @@ public class DirectRequestController {
     private static final int OBSERVED_BODY_MAX = 1500;
 
     private final DirectRequestService directRequestService;
+    private final CurlParser curlParser;
     /** Gözlenen yanıttan türetilmiş gerçekleri prompt'a yazmak için */
     private final ResponseAssertionDeriver assertionDeriver;
     private final TestGenerationService testGenerationService;
@@ -53,6 +55,31 @@ public class DirectRequestController {
     public ResponseEntity<DirectRequestService.DirectRunResult> execute(
             @RequestBody DirectRequestService.DirectRunRequest request) {
         return ResponseEntity.ok(directRequestService.execute(request));
+    }
+
+    public record CurlParseRequest(String curl) {}
+
+    public record CurlParseResponse(
+            String method,
+            String methodReason,
+            String url,
+            Map<String, String> headers,
+            String body
+    ) {}
+
+    @Operation(summary = "Postman cURL Komutunu Ayrıştır",
+            description = "-X olmasa bile cURL kurallarına göre metot, URL, başlık ve gövdeyi çıkarır.")
+    @PostMapping(value = "/parse-curl",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<CurlParseResponse> parseCurl(@RequestBody CurlParseRequest request) {
+        var parsed = curlParser.parse(request.curl());
+        if (parsed == null) {
+            throw new BadRequestException("cURL içinde geçerli bir http/https URL bulunamadı");
+        }
+        return ResponseEntity.ok(new CurlParseResponse(
+                parsed.method(), CurlParser.describeMethodDetection(request.curl()),
+                parsed.url(), parsed.headers(), parsed.body()));
     }
 
     public record GenerateFromResponseRequest(

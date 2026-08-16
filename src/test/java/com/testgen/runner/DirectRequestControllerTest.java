@@ -84,6 +84,23 @@ class DirectRequestControllerTest {
                 .andExpect(jsonPath("$.body").value("{\"id\":7,\"name\":\"Pamuk\"}"));
     }
 
+    @Test
+    @DisplayName("POST /parse-curl — -X olmadan --data içeren Postman cURL'ünü POST algılar")
+    void parseCurlInfersPostFromData() throws Exception {
+        mockMvc.perform(post("/api/v1/runner/parse-curl")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"curl":"curl --location 'https://ornek.local/soap' --header 'Content-Type: text/xml' --data '<Envelope/>'"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.method").value("POST"))
+                .andExpect(jsonPath("$.methodReason").value(
+                        org.hamcrest.Matchers.containsString("POST")))
+                .andExpect(jsonPath("$.url").value("https://ornek.local/soap"))
+                .andExpect(jsonPath("$.headers.Content-Type").value("text/xml"))
+                .andExpect(jsonPath("$.body").value("<Envelope/>"));
+    }
+
     /**
      * SSRF reddi bilinçli bir karardır. 500 dönerse kullanıcı "sistem bozuk" sanır ve
      * engellemenin nedeni kaybolur; 400 + açıklayıcı mesaj doğru sözleşmedir.

@@ -256,8 +256,23 @@ public class TestRunnerService {
         return CompletableFuture.completedFuture(healed);
     }
 
-    /** Ortak iyileştirme adımı — hem otomatik hem elle tetiklenen yol bunu kullanır. */
+    /**
+     * Ortak iyileştirme adımı — hem otomatik hem elle tetiklenen yol bunu kullanır.
+     *
+     * <p>Onarım turundaki LLM çağrıları da isteğe bağlanır; aksi hâlde çağrı geçmişinde
+     * FAILURE_ANALYSIS satırları sahipsiz görünüyordu.
+     */
     private int healFailedCases(TestGenerationRequest request) {
+        com.testgen.llm.LlmCallContext.set(request.getId(),
+                com.testgen.llm.LlmCallContext.Phase.SELF_HEAL);
+        try {
+            return healFailedCasesInternal(request);
+        } finally {
+            com.testgen.llm.LlmCallContext.clear();
+        }
+    }
+
+    private int healFailedCasesInternal(TestGenerationRequest request) {
         List<GeneratedTestCase> failedCases = testCaseRepository
                 .findByRequestIdAndSupersededFalse(request.getId()).stream()
                 .filter(tc -> tc.getRunStatus() == TestRunStatus.FAILED)

@@ -3,6 +3,7 @@ package com.testgen.service;
 import com.testgen.agent.AiAgent;
 import com.testgen.agent.AiAgentContext;
 import com.testgen.agent.AiAgentResult;
+import com.testgen.agent.AiAgentRegistry;
 import com.testgen.agent.AiAgentRole;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestGenerationRequest;
@@ -15,7 +16,10 @@ import dev.langchain4j.model.output.TokenUsage;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -31,20 +35,23 @@ public class AiAgentOrchestratorServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void supervisorReportIsAppendedToContext() {
+    public void supervisorFreeTextIsNotUsedAsGenerationEvidence() {
         ChatLanguageModel mockModel = Mockito.mock(ChatLanguageModel.class);
         Response<AiMessage> response = Response.from(
                 AiMessage.from("SUPERVISOR PLAN RAPORU"), new TokenUsage(10, 10));
         when(mockModel.generate(anyList())).thenReturn(response);
         when(mockModel.generate(anyList(), anyList())).thenReturn(response);
 
-        AiAgentOrchestratorService service = new AiAgentOrchestratorService(List.of(), mockModel, Mockito.mock(AgentAnalysisRepository.class));
+        AiAgentOrchestratorService service = new AiAgentOrchestratorService(
+                registry(), mockModel, Mockito.mock(AgentAnalysisRepository.class));
 
         String enriched = service.enrichAdditionalContext(backendRequest);
 
         assertTrue(enriched.contains("base context"));
         assertTrue(enriched.contains("## AI AGENT ANALYSIS"));
-        assertTrue(enriched.contains("SUPERVISOR PLAN RAPORU"));
+        assertTrue(enriched.contains("output-DEVELOPER"));
+        assertFalse(enriched.contains("SUPERVISOR PLAN RAPORU"),
+                "Serbest supervisor sentezi üretim kanıtı olarak taşınmamalı");
     }
 
     @Test
@@ -59,15 +66,15 @@ public class AiAgentOrchestratorServiceTest {
         AiAgent report    = fixedAgent(AiAgentRole.REPORT, "Report Agent", "yonetici ozeti");
 
         AiAgentOrchestratorService service =
-                new AiAgentOrchestratorService(List.of(secOps, report, developer), mockModel, Mockito.mock(AgentAnalysisRepository.class));
+                new AiAgentOrchestratorService(registry(secOps, report, developer), mockModel,
+                        Mockito.mock(AgentAnalysisRepository.class));
         // Sira dogrulamasi ozet ajanini da icerdigi icin FULL mod
         org.springframework.test.util.ReflectionTestUtils.setField(service, "agentMode",
                 com.testgen.agent.AgentRouting.Mode.FULL);
 
         String enriched = service.enrichAdditionalContext(backendRequest);
 
-        // Fallback koşumu ajan çıktılarının context'e sırayla eklenmesini garanti eder
-        assertTrue(enriched.contains("Fallback"));
+        // Fallback koşumu gerçekleşen ajan çıktılarının context'e sırayla eklenmesini garanti eder
         assertTrue(enriched.contains("api kontrati"));
         assertTrue(enriched.contains("auth riski"));
         assertTrue(enriched.contains("yonetici ozeti"));
@@ -92,11 +99,10 @@ public class AiAgentOrchestratorServiceTest {
         AiAgent report    = fixedAgent(AiAgentRole.REPORT, "Report Agent", "yonetici ozeti");
 
         AiAgentOrchestratorService service = new AiAgentOrchestratorService(
-                List.of(developer, report), mockModel, Mockito.mock(AgentAnalysisRepository.class));
+                registry(developer, report), mockModel, Mockito.mock(AgentAnalysisRepository.class));
 
         String enriched = service.enrichAdditionalContext(backendRequest);
 
-        assertTrue(enriched.contains("Fallback"), "ajan çağrılmadıysa fallback koşmalı");
         assertTrue(enriched.contains("api kontrati"));
         // LEAN (varsayilan): ozet ajani test uretimini etkilemedigi icin kosmaz
         assertTrue(!enriched.contains("yonetici ozeti"), "LEAN modda REPORT ajani kosmamali");
@@ -116,9 +122,10 @@ public class AiAgentOrchestratorServiceTest {
         var full = com.testgen.agent.AgentRouting.resolve(frontend, com.testgen.agent.AgentRouting.Mode.FULL);
 
         assertEquals(3, lean.size(), "FRONTEND_WEB LEAN: PM + Analyst + Automation");
-        assertEquals(6, full.size(), "FULL: + SecOps, Performance, Report");
+        assertEquals(7, full.size(), "FULL: + SecOps, Performance, DevOps, Report");
         assertTrue(!lean.contains(AiAgentRole.REPORT), "ozet ajani LEAN'de kosmaz");
         assertTrue(full.contains(AiAgentRole.REPORT));
+        assertTrue(full.contains(AiAgentRole.DEVOPS), "kayıtlı DevOps agent FULL modda çalışmalı");
         // Zorunlu ajanlar her iki modda da korunur
         assertTrue(lean.containsAll(com.testgen.agent.AgentRouting.mandatory(frontend)));
         assertTrue(full.containsAll(com.testgen.agent.AgentRouting.mandatory(frontend)));
@@ -128,7 +135,7 @@ public class AiAgentOrchestratorServiceTest {
     public void routingPlanMatchesTheAgentsThatActuallyRun() {
         // Plan artik yalnizca bir oneri degil: kosan liste ile AYNI kaynaktan uretilir.
         AiAgentOrchestratorService service = new AiAgentOrchestratorService(
-                List.of(), Mockito.mock(ChatLanguageModel.class), Mockito.mock(AgentAnalysisRepository.class));
+                registry(), Mockito.mock(ChatLanguageModel.class), Mockito.mock(AgentAnalysisRepository.class));
 
         String plan = service.buildRoutingPlan(backendRequest);
         var running = com.testgen.agent.AgentRouting.resolve(backendRequest, com.testgen.agent.AgentRouting.Mode.LEAN);
@@ -144,7 +151,8 @@ public class AiAgentOrchestratorServiceTest {
     @Test
     public void routingPlanAdaptsToRequestType() {
         AiAgentOrchestratorService service =
-                new AiAgentOrchestratorService(List.of(), Mockito.mock(ChatLanguageModel.class), Mockito.mock(AgentAnalysisRepository.class));
+                new AiAgentOrchestratorService(registry(), Mockito.mock(ChatLanguageModel.class),
+                        Mockito.mock(AgentAnalysisRepository.class));
 
         // BACKEND_API + user story yok → PM gereksiz
         String backendPlan = service.buildRoutingPlan(backendRequest);
@@ -181,7 +189,8 @@ public class AiAgentOrchestratorServiceTest {
     @Test
     public void existingAnalysisSectionIsNotRegenerated() {
         ChatLanguageModel mockModel = Mockito.mock(ChatLanguageModel.class);
-        AiAgentOrchestratorService service = new AiAgentOrchestratorService(List.of(), mockModel, Mockito.mock(AgentAnalysisRepository.class));
+        AiAgentOrchestratorService service = new AiAgentOrchestratorService(
+                registry(), mockModel, Mockito.mock(AgentAnalysisRepository.class));
 
         TestGenerationRequest alreadyEnriched = TestGenerationRequest.builder()
                 .testType(TestType.BACKEND_API)
@@ -208,6 +217,17 @@ public class AiAgentOrchestratorServiceTest {
         };
     }
 
+    private AiAgentRegistry registry(AiAgent... overrides) {
+        EnumMap<AiAgentRole, AiAgent> byRole = new EnumMap<>(AiAgentRole.class);
+        for (AiAgentRole role : AiAgentRole.values()) {
+            byRole.put(role, fixedAgent(role, role + " Agent", "output-" + role));
+        }
+        for (AiAgent override : overrides) {
+            byRole.put(override.role(), override);
+        }
+        return new AiAgentRegistry(new ArrayList<>(byRole.values()));
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     public void supervisorCannotCallAgentsOutsideThePlan() {
@@ -220,7 +240,7 @@ public class AiAgentOrchestratorServiceTest {
         var allowed = com.testgen.agent.AgentRouting.resolve(
                 backendRequest, com.testgen.agent.AgentRouting.Mode.LEAN);
         com.testgen.agent.AgentTools tools = new com.testgen.agent.AgentTools(
-                backendRequest, List.of(developer, report), context, allowed);
+                registry(developer, report), context, allowed);
 
         String devOut = tools.askDeveloper("kontrat");
         String reportOut = tools.askReportAgent("ozet");
@@ -236,7 +256,7 @@ public class AiAgentOrchestratorServiceTest {
         AiAgent developer = fixedAgent(AiAgentRole.DEVELOPER, "Developer Agent", "api kontrati");
         AiAgentContext context = new AiAgentContext(backendRequest);
         com.testgen.agent.AgentTools tools = new com.testgen.agent.AgentTools(
-                backendRequest, List.of(developer), context,
+                registry(developer), context,
                 com.testgen.agent.AgentRouting.resolve(backendRequest,
                         com.testgen.agent.AgentRouting.Mode.LEAN));
 
@@ -245,5 +265,61 @@ public class AiAgentOrchestratorServiceTest {
 
         assertTrue(ikinci.contains("zaten çağrıldı"));
         assertEquals(1, context.results().size(), "tekrar cagri maliyet uretmemeli");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void mandatoryAgentFailureStopsFallback() {
+        ChatLanguageModel mockModel = Mockito.mock(ChatLanguageModel.class);
+        when(mockModel.generate(anyList())).thenThrow(new RuntimeException("supervisor kapalı"));
+        when(mockModel.generate(anyList(), anyList())).thenThrow(new RuntimeException("supervisor kapalı"));
+
+        AiAgent failingDeveloper = new AiAgent() {
+            @Override
+            public AiAgentRole role() {
+                return AiAgentRole.DEVELOPER;
+            }
+
+            @Override
+            public AiAgentResult analyze(AiAgentContext context) {
+                throw new TestGenerationException("ölçülen LLM hatası");
+            }
+        };
+        AiAgentOrchestratorService service = new AiAgentOrchestratorService(
+                registry(failingDeveloper), mockModel, Mockito.mock(AgentAnalysisRepository.class));
+
+        TestGenerationException error = assertThrows(TestGenerationException.class,
+                () -> service.enrichAdditionalContext(backendRequest));
+
+        assertTrue(error.getMessage().contains("Zorunlu agent başarısız: DEVELOPER"));
+    }
+
+    @Test
+    public void sequentialFallbackDoesNotRunAnAgentAlreadyCompletedBySupervisor() {
+        AtomicInteger developerCalls = new AtomicInteger();
+        AiAgent developer = new AiAgent() {
+            @Override
+            public AiAgentRole role() {
+                return AiAgentRole.DEVELOPER;
+            }
+
+            @Override
+            public AiAgentResult analyze(AiAgentContext context) {
+                developerCalls.incrementAndGet();
+                return new AiAgentResult(role(), "Developer Agent", "api kontratı");
+            }
+        };
+        AiAgentOrchestratorService service = new AiAgentOrchestratorService(
+                registry(developer), Mockito.mock(ChatLanguageModel.class),
+                Mockito.mock(AgentAnalysisRepository.class));
+        AiAgentContext context = new AiAgentContext(backendRequest);
+        context.addResult(developer.analyze(context));
+
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                service, "runSequentialFallback", backendRequest, context);
+
+        assertEquals(1, developerCalls.get(), "tamamlanan agent fallback'te tekrar çağrılmamalı");
+        assertTrue(context.hasResult(AiAgentRole.AI_LLM_TEST_ANALYST));
+        assertTrue(context.hasResult(AiAgentRole.TEST_AUTOMATION));
     }
 }

@@ -237,18 +237,27 @@ class PromptTemplatesTest {
         @Test
         @DisplayName("GraphQL prompt'u sorgu detaylarını taşır")
         void graphqlCarriesQueryDetails() {
-            String prompt = PromptTemplates.buildGraphQLPrompt("query { pets { id } }", "bağlam");
+            String prompt = PromptTemplates.buildGraphQLPrompt(
+                    "Kullanıcının verdiği endpoint: https://api.example.test/gql\nquery { pets { id } }",
+                    "bağlam");
 
             assertTrue(prompt.contains("query { pets { id } }"));
+            assertTrue(prompt.contains("https://api.example.test/gql"));
+            assertTrue(prompt.contains("never default to '/graphql'"));
+            assertFalse(prompt.contains("match response.data != null"));
         }
 
         @Test
         @DisplayName("SOAP prompt'u XML zarfını taşır")
         void soapCarriesEnvelope() {
             String prompt = PromptTemplates.buildSoapPrompt(
-                    "<soap:Envelope><soap:Body/></soap:Envelope>", "bağlam");
+                    "Kullanıcının verdiği endpoint: https://api.example.test/ws\n"
+                            + "<soap:Envelope><soap:Body/></soap:Envelope>", "bağlam");
 
             assertTrue(prompt.contains("soap:Envelope"));
+            assertTrue(prompt.contains("https://api.example.test/ws"));
+            assertTrue(prompt.contains("never invent a path"));
+            assertFalse(prompt.contains("Generate at least one negative scenario"));
         }
 
         @Test
@@ -268,6 +277,17 @@ class PromptTemplatesTest {
                     "{\"a\":1}", "HAR", "bağlam");
 
             assertTrue(prompt.contains("HAR"));
+        }
+
+        @Test
+        @DisplayName("Ham yük prompt'u gözlenmeyen status ve negatif varyant istemez")
+        void rawPayloadPromptDoesNotDemandFabricatedAssertions() {
+            String prompt = PromptTemplates.buildRawPayloadPrompt(
+                    "curl -X GET https://api.example.test/pets", "CURL", "");
+
+            assertFalse(prompt.contains("status 200/201"));
+            assertFalse(prompt.contains("expect validation errors (400)"));
+            assertTrue(prompt.contains("Assert only status/header/body values present in Context"));
         }
 
         /**

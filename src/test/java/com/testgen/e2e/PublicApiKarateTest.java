@@ -4,6 +4,7 @@ import com.intuit.karate.Results;
 import com.intuit.karate.Runner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.net.HttpURLConnection;
@@ -74,6 +75,7 @@ class PublicApiKarateTest {
     }
 
     @Test
+    @Tag("external")
     @DisplayName("Objects API sözleşme senaryoları geçer")
     void runsObjectsApiFeature() {
         assumeTrue(reachable,

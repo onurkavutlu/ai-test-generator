@@ -293,6 +293,18 @@ public class CodeCleanerTest {
     }
 
     @Test
+    public void normalizeRenamesGeneratedFallbackClassToExpectedFileName() {
+        String raw = "package com.testgen.generated;\n\n"
+                + "public class GeneratedTest_123 {\n"
+                + "    @Test\n    public void smoke() {}\n}";
+
+        String normalized = CodeCleaner.normalizeGeneratedJavaTest(raw, "GeneratedApiTest");
+
+        assertTrue(normalized.contains("public class GeneratedApiTest"), normalized);
+        assertTrue(!normalized.contains("GeneratedTest_123"), normalized);
+    }
+
+    @Test
     public void normalizeRewritesJUnit4AssertCalls() {
         String raw = "package com.testgen.generated;\n\n" +
                 "public class SmokeTest {\n    @Test\n    public void t() {\n" +

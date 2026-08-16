@@ -36,6 +36,8 @@ graphify-out/
 generated-tests/
 selenium_tests/
 surefire-reports/
+docs/test-reports/*.md
+!docs/test-reports/README.md
 
 # OS
 .DS_Store
@@ -62,3 +64,11 @@ _to_delete/
 
 # Teslimat için üretilen git bundle'ı — repoyu kendi içine gömmenin anlamı yok.
 *.bundle
+
+# macOS ve Office artıkları
+.DS_Store
+~$*
+
+# Kökte kalan eski koşum çıktıları (gerçekleri target/ altında üretilir)
+/report.json
+/surefire-reports/

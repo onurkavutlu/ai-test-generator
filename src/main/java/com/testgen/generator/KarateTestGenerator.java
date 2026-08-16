@@ -33,7 +33,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class KarateTestGenerator {
+public class KarateTestGenerator implements FrameworkTestGenerator {
 
     private final LlmService llmService;
     private final ApiCollectionParser apiCollectionParser;
@@ -45,6 +45,12 @@ public class KarateTestGenerator {
     @Value("${test-generator.output.karate-path}")
     private String outputPath;
 
+    @Override
+    public TestFramework framework() {
+        return TestFramework.KARATE;
+    }
+
+    @Override
     public List<GeneratedTestCase> generate(TestGenerationRequest request) {
         List<GeneratedTestCase> results = new ArrayList<>();
 
@@ -58,6 +64,14 @@ public class KarateTestGenerator {
             } else if ("SOAP".equalsIgnoreCase(request.getPayloadType())) {
                 results.addAll(generateFromSoap(request));
             } else {
+                String payloadType = request.getPayloadType();
+                if (payloadType != null && !payloadType.isBlank()
+                        && !"CURL".equalsIgnoreCase(payloadType)
+                        && !"CAPTURED".equalsIgnoreCase(payloadType)) {
+                    throw new com.testgen.service.TestGenerationException(
+                            "Karate raw payload tipi henüz desteklenmiyor: " + payloadType
+                                    + ". Desteklenen tipler: CURL, CAPTURED, API_COLLECTION, HAR, GRAPHQL, SOAP.");
+                }
                 results.add(generateFromRawPayload(request));
                 // Gözlenen yanıttan türetilmiş doğrulamalar varsa, LLM çıktısından BAĞIMSIZ
                 // olarak deterministik bir case daha üretilir. Öncesinde bu yalnızca LLM
@@ -90,8 +104,12 @@ public class KarateTestGenerator {
                 return cases;
             }
 
-            // Her path için test üret — istekte maxCases verildiyse o sayıda endpoint'te dur
-            int limit = generationLimit.resolve(request, openAPI.getPaths().size());
+            // Limit path sayısına değil operasyon sayısına uygulanır. Aynı path altında
+            // birden fazla HTTP metodu varsa her biri ayrı test case'tir.
+            int operationCount = openAPI.getPaths().values().stream()
+                    .mapToInt(pathItem -> pathItem.readOperationsMap().size())
+                    .sum();
+            int limit = generationLimit.resolve(request, operationCount);
             outer:
             for (Map.Entry<String, PathItem> entry : openAPI.getPaths().entrySet()) {
                 String path = entry.getKey();
@@ -233,27 +251,30 @@ public class KarateTestGenerator {
     }
 
     private List<GeneratedTestCase> generateFromGraphQL(TestGenerationRequest request) {
+        String endpoint = ExplicitEndpointValidator.requireHttpUrl(request, "GraphQL");
         List<GeneratedTestCase> cases = new ArrayList<>();
         List<ParsedRequestDto> parsedRequests = graphqlParser.parse(request.getRawPayload());
         for (int i = 0; i < parsedRequests.size(); i++) {
-            cases.add(generateSingleGraphQLRequest(parsedRequests.get(i), request, "GraphQLItem" + i));
+            cases.add(generateSingleGraphQLRequest(parsedRequests.get(i), request, endpoint, "GraphQLItem" + i));
         }
         return cases;
     }
 
     private List<GeneratedTestCase> generateFromSoap(TestGenerationRequest request) {
+        String endpoint = ExplicitEndpointValidator.requireHttpUrl(request, "SOAP");
         List<GeneratedTestCase> cases = new ArrayList<>();
         List<ParsedRequestDto> parsedRequests = soapXmlParser.parse(request.getRawPayload());
         for (int i = 0; i < parsedRequests.size(); i++) {
-            cases.add(generateSingleSoapRequest(parsedRequests.get(i), request, "SoapItem" + i));
+            cases.add(generateSingleSoapRequest(parsedRequests.get(i), request, endpoint, "SoapItem" + i));
         }
         return cases;
     }
 
     private GeneratedTestCase generateSingleGraphQLRequest(ParsedRequestDto parsed, TestGenerationRequest request,
-            String prefix) {
+            String endpoint, String prefix) {
         String context = request.getAdditionalContext() != null ? request.getAdditionalContext() : "";
-        String generatedContent = llmService.generateFromGraphQL(parsed.payloadDetails(), context);
+        String requestDetails = "Kullanıcının verdiği endpoint: " + endpoint + "\n" + parsed.payloadDetails();
+        String generatedContent = llmService.generateFromGraphQL(requestDetails, context);
         String cleanContent = CodeCleaner.cleanFeatureContent(generatedContent);
         String featureName = buildFeatureName(parsed.name() != null ? parsed.name() : prefix, parsed.method());
 
@@ -269,9 +290,10 @@ public class KarateTestGenerator {
     }
 
     private GeneratedTestCase generateSingleSoapRequest(ParsedRequestDto parsed, TestGenerationRequest request,
-            String prefix) {
+            String endpoint, String prefix) {
         String context = request.getAdditionalContext() != null ? request.getAdditionalContext() : "";
-        String generatedContent = llmService.generateFromSoap(parsed.payloadDetails(), context);
+        String requestDetails = "Kullanıcının verdiği endpoint: " + endpoint + "\n" + parsed.payloadDetails();
+        String generatedContent = llmService.generateFromSoap(requestDetails, context);
         String cleanContent = CodeCleaner.cleanFeatureContent(generatedContent);
         String featureName = buildFeatureName(parsed.name() != null ? parsed.name() : prefix, parsed.method());
 

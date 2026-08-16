@@ -7,18 +7,26 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * "Önce Gözlemle" adımı — üretim hattının ilk halkası.
@@ -55,6 +63,17 @@ public class ObservationService {
      */
     private final com.testgen.config.OutboundUrlGuard urlGuard;
 
+    /**
+     * cURL'ü kanonik isteğe çevirir: metot, başlıklar ve gövde.
+     *
+     * <p>ÖLÇÜLEN ARIZA: önceden cURL'den yalnızca URL çıkarılıyor, metot sadece
+     * {@code -X} bayrağından okunuyordu. {@code -X} yazılmayan ama {@code --data}
+     * taşıyan bir SOAP çağrısı GET sanıldı; başlıklar ve gövde yok sayılarak SOAP
+     * ucuna boş bir GET atıldı, yanıt alınamadı ve ajanlar bunu "endpoint erişilemez"
+     * diye okuyup analizin tamamını yanlış öncüle dayandırdı.
+     */
+    private final com.testgen.parser.CurlParser curlParser;
+
     public static final String SECTION_TITLE = "## OBSERVED";
 
     private static final int PROBE_LIMIT = 3;
@@ -66,10 +85,56 @@ public class ObservationService {
     private static final Pattern HTML_TITLE = Pattern.compile("<title>(.*?)</title>", Pattern.DOTALL);
     private static final Pattern HTML_ID = Pattern.compile("<(input|button|select|textarea|form|a)\\b[^>]*\\bid=[\"']([^\"']+)[\"']");
 
-    private final HttpClient client = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+    /**
+     * Yalnızca güvenilen yerel test ortamlarında kullanılacak geçici kaçış anahtarı.
+     * Varsayılan kapalıdır; local profil, kurumsal CA truststore'a eklenene kadar açar.
+     */
+    @Value("${test-generator.observation.insecure-ssl:false}")
+    private boolean insecureSsl;
+
+    private HttpClient client = buildHttpClient(false);
+
+    @PostConstruct
+    void configureHttpClient() {
+        client = buildHttpClient(insecureSsl);
+        if (insecureSsl) {
+            log.warn("⚠️  GÖZLEM SSL SERTİFİKA DOĞRULAMASI KAPALI — yalnızca yerel test ortamında kullanın");
+        }
+    }
+
+    static HttpClient buildHttpClient(boolean insecureSsl) {
+        HttpClient.Builder builder = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .followRedirects(HttpClient.Redirect.NORMAL);
+
+        if (!insecureSsl) {
+            return builder.build();
+        }
+
+        try {
+            X509TrustManager trustAll = new X509TrustManager() {
+                @Override
+                public void checkClientTrusted(X509Certificate[] chain, String authType) {
+                    // Geçici local profil seçeneği: istemci sertifikası doğrulanmaz.
+                }
+
+                @Override
+                public void checkServerTrusted(X509Certificate[] chain, String authType) {
+                    // Geçici local profil seçeneği: sunucu sertifika zinciri doğrulanmaz.
+                }
+
+                @Override
+                public X509Certificate[] getAcceptedIssuers() {
+                    return new X509Certificate[0];
+                }
+            };
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, new TrustManager[]{trustAll}, new SecureRandom());
+            return builder.sslContext(sslContext).build();
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Güvensiz gözlem SSL istemcisi oluşturulamadı", e);
+        }
+    }
 
     /**
      * İsteğin hedefinden gözlem toplar ve additionalContext'e OBSERVED bölümü ekler.
@@ -86,7 +151,7 @@ public class ObservationService {
             if (request.getTestType() == TestType.FRONTEND_WEB) {
                 section = observePage(request.getApplicationUrl());
             } else if (request.getRawPayload() != null && !request.getRawPayload().isBlank()) {
-                section = observeCurl(request.getRawPayload());
+                section = observeCurl(request.getRawPayload(), request);
             } else if (request.getSwaggerUrl() != null && !request.getSwaggerUrl().isBlank()) {
                 section = observeSwagger(request.getSwaggerUrl());
             } else {
@@ -100,7 +165,15 @@ public class ObservationService {
         if (section == null || section.isBlank()) {
             return existing;
         }
-        log.info("🔭 Gözlem tamamlandı — gerçek veri bağlama eklendi ({} karakter)", section.length());
+        // Eski log HER durumda "gerçek veri eklendi" diyordu — hiç istek gönderilmemiş
+        // olsa bile. Bu, sorunu gizleyen bir yanlış beyandı: 197 karakterlik
+        // "gözlemlenemedi" notu, gerçek gözlemle aynı satırla raporlanıyordu.
+        if (isObserved(section)) {
+            log.info("🔭 Gözlem tamamlandı — canlı yanıt bağlama eklendi ({} karakter)", section.length());
+        } else {
+            log.warn("⚠️  GÖZLEM YAPILAMADI — üretim ölçülmüş veriye dayanmıyor. Not: {}",
+                    firstLine(section));
+        }
         return existing.isBlank() ? section : existing + "\n\n" + section;
     }
 
@@ -136,33 +209,157 @@ public class ObservationService {
     }
 
     // ─────────────────────────────────────────────────────────
-    // BACKEND: cURL güvenli koşum (yalnız GET/HEAD)
+    // BACKEND: cURL — kullanıcının verdiği isteğin AYNISI koşulur
     // ─────────────────────────────────────────────────────────
-    private String observeCurl(String rawPayload) {
-        Matcher mu = CURL_URL.matcher(rawPayload);
-        if (!mu.find()) return null;
-        String url = mu.group(1);
 
-        Matcher mm = CURL_METHOD.matcher(rawPayload);
-        String method = mm.find() ? mm.group(1).toUpperCase(Locale.ROOT) : "GET";
+    /**
+     * Kullanıcının verdiği isteği <b>metoduna bakmaksızın</b> gönderir.
+     *
+     * <p><b>Neden metot ayrımı yok:</b> isteği kullanıcı seçti ve kendi eliyle buraya
+     * yapıştırdı. "Bu isteğe test yaz" demenin, "bu isteği çalıştır" dışında bir anlamı
+     * yoktur — Postman'de Send'e basmakla aynı şey. Bir dönem burada POST/DELETE için
+     * onay kapısı vardı; hiçbir şeyi güvenli hâle getirmedi, yalnızca kullanıcının kendi
+     * verdiği isteği gözlemlemesini engelledi ve üretim ölçümsüz kaldı.
+     *
+     * <p>Onay kuralı isteğin <b>metoduna</b> değil <b>kaynağına</b> bağlıdır ve doğru
+     * yerde uygulanır: aracın kendi keşfettiği uçlar (Swagger tarama) yalnızca yan
+     * etkisiz olarak problanır — bkz. {@code observeSwagger}. Orada kullanıcı o
+     * çağrıları hiç istememiştir.
+     */
+    private String observeCurl(String rawPayload, TestGenerationRequest request) {
+        var parsed = curlParser.parse(rawPayload);
+        if (parsed == null) return null;
 
-        if (!method.equals("GET") && !method.equals("HEAD")) {
+        String method = parsed.method();
+        String url = parsed.url();
+
+        Observed observed = send(parsed);
+        if (!observed.ok()) {
+            recordSkip(request, method + " " + url,
+                    "İstek gönderildi ancak yanıt alınamadı: " + observed.error());
             return SECTION_TITLE + " NOTE\n"
-                    + "İstek " + method + " (mutasyonlu) olduğu için otomatik gözlem koşumu YAPILMADI. "
-                    + "Gerçek yanıtla üretim için Runner ekranındaki 'Yanıttan Test Üret' akışını kullanın. "
-                    + "Ajanlar: doğrulanmamış varsayımları 'varsayım' olarak işaretleyin.";
+                    + "Hedefe (" + method + " " + url + ") istek gönderildi ancak yanıt alınamadı: "
+                    + observed.error() + "\n"
+                    + "Ajanlar: status/alan UYDURMAYIN; hedefin iş davranışı hakkında çıkarım yapmayın.";
         }
 
-        HttpResponse<String> resp = get(url);
-        if (resp == null) {
-            return SECTION_TITLE + " NOTE\nHedef (" + url + ") gözlem sırasında erişilemedi — status/alan uydurmayın.";
+        // Kanıtı isteğe iliştir: kullanıcı, üretilen testin neye dayandığını görebilsin.
+        recordObservation(request, method + " " + url, observed);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(SECTION_TITLE).append(" RESPONSE (canlı koşumdan yakalandı — assertion'lar BU yanıta göre)\n");
+        sb.append("İstek        : ").append(method).append(' ').append(url).append('\n');
+        if (!parsed.headers().isEmpty()) {
+            sb.append("Gönderilen Başlıklar: ").append(parsed.headers().keySet()).append('\n');
         }
-        return SECTION_TITLE + " RESPONSE (canlı koşumdan yakalandı — assertion'lar BU yanıta göre)\n"
-                + "İstek        : " + method + " " + url + "\n"
-                + "Gözlenen Status: " + resp.statusCode() + "\n"
-                + "Gözlenen Body (kısaltılmış):\n" + snippet(resp.body()) + "\n"
-                + "KURAL: Gözlenmeyen alan/status/header UYDURMA; auth izi yoksa 401/403 senaryosu YAZMA.";
+        sb.append("Gözlenen Status: ").append(observed.status()).append('\n');
+        // Süre GERÇEKTEN ölçüldü; SLA yalnızca bu değerden türetilebilir.
+        sb.append("Gözlenen Süre  : ").append(observed.durationMs()).append(" ms\n");
+        sb.append("Gözlenen Body (kısaltılmış):\n").append(snippet(observed.body())).append('\n');
+        appendDerivedFacts(sb, observed.status(), observed.headers(), observed.body());
+        sb.append("KURAL: Gözlenmeyen alan/status/header UYDURMA; auth izi yoksa 401/403 senaryosu YAZMA. ")
+          .append("Ölçülmemiş SLA yazma — yukarıdaki süre dışında eşik üretme.");
+        return sb.toString();
     }
+
+    /** Ölçülen değerleri isteğe iliştirir — üretilen testin kanıtı budur. */
+    private static void recordObservation(TestGenerationRequest request, String requestLine,
+                                          Observed observed) {
+        if (request == null) return;
+        request.setObservedRequestLine(requestLine);
+        request.setObservedStatus(observed.status());
+        request.setObservedDurationMs(observed.durationMs());
+        request.setObservedBody(observed.body());
+        request.setObservedResponseHeaders(observed.headerLines());
+        request.setObservedResponseCookies(observed.cookieLines());
+        request.setObservedResponseSizeBytes(observed.responseSizeBytes());
+        request.setObservedHttpVersion(observed.httpVersion());
+        request.setObservationSkipReason(null);
+        request.setObservedAt(java.time.LocalDateTime.now());
+    }
+
+    /** Gözlem yapılamadıysa NEDENİ saklanır; sessizce boş bırakılmaz. */
+    private static void recordSkip(TestGenerationRequest request, String requestLine, String reason) {
+        if (request == null) return;
+        request.setObservedRequestLine(requestLine);
+        request.setObservedStatus(null);
+        request.setObservedDurationMs(null);
+        request.setObservedBody(null);
+        request.setObservedResponseHeaders(null);
+        request.setObservedResponseCookies(null);
+        request.setObservedResponseSizeBytes(null);
+        request.setObservedHttpVersion(null);
+        request.setObservationSkipReason(reason);
+        request.setObservedAt(java.time.LocalDateTime.now());
+    }
+
+    /** Gözlem sonucu: gerçekten ölçülen değerler ya da hatanın kendisi. */
+    private record Observed(boolean ok, String error, int status, long durationMs,
+                            java.util.Map<String, String> headers, String body,
+                            String headerLines, String cookieLines,
+                            long responseSizeBytes, String httpVersion) {
+        static Observed fail(String error) {
+            return new Observed(false, error, 0, 0, java.util.Map.of(), null,
+                    "", "", 0, null);
+        }
+    }
+
+    /**
+     * Kullanıcının verdiği isteğin AYNISINI gönderir: aynı metot, aynı başlıklar,
+     * aynı gövde. Süre ölçülür.
+     */
+    private Observed send(com.testgen.parser.ParsedRequestDto parsed) {
+        try {
+            urlGuard.verify(parsed.url());
+
+            HttpRequest.BodyPublisher publisher = (parsed.body() == null || parsed.body().isBlank())
+                    ? HttpRequest.BodyPublishers.noBody()
+                    : HttpRequest.BodyPublishers.ofString(parsed.body());
+
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(parsed.url()))
+                    .timeout(PROBE_TIMEOUT)
+                    .method(parsed.method(), publisher);
+
+            parsed.headers().forEach((k, v) -> {
+                // HttpClient bazı başlıkları kendisi yönetir; kullanıcının verdiğini
+                // eklemeye çalışmak IllegalArgumentException fırlatır.
+                if (!RESTRICTED_HEADERS.contains(k.toLowerCase(Locale.ROOT))) {
+                    builder.header(k, v);
+                }
+            });
+
+            long start = System.currentTimeMillis();
+            HttpResponse<String> resp = client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            long durationMs = System.currentTimeMillis() - start;
+
+            java.util.Map<String, String> headers = new java.util.LinkedHashMap<>();
+            resp.headers().map().forEach((k, v) -> {
+                if (!k.startsWith(":")) headers.put(k, String.join(", ", v));
+            });
+
+            String headerLines = resp.headers().map().entrySet().stream()
+                    .filter(e -> !e.getKey().startsWith(":"))
+                    .flatMap(e -> e.getValue().stream().map(v -> e.getKey() + ": " + v))
+                    .collect(java.util.stream.Collectors.joining("\n"));
+            String cookieLines = String.join("\n", resp.headers().allValues("set-cookie"));
+            String responseBody = resp.body();
+            long responseSize = responseBody == null ? 0
+                    : responseBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+
+            return new Observed(true, null, resp.statusCode(), durationMs, headers, responseBody,
+                    headerLines, cookieLines, responseSize, resp.version().name());
+
+        } catch (Exception e) {
+            String reason = e.getClass().getSimpleName()
+                    + (e.getMessage() == null ? "" : ": " + e.getMessage());
+            log.warn("Gözlem isteği başarısız ({} {}): {}", parsed.method(), parsed.url(), reason);
+            return Observed.fail(reason);
+        }
+    }
+
+    private static final java.util.Set<String> RESTRICTED_HEADERS = java.util.Set.of(
+            "connection", "content-length", "expect", "host", "upgrade");
 
     // ─────────────────────────────────────────────────────────
     // BACKEND: Swagger'dan güvenli endpoint probları
@@ -214,8 +411,13 @@ public class ObservationService {
                 headers.put(k, String.join(", ", v));
             }
         });
+        appendDerivedFacts(sb, resp.statusCode(), headers, resp.body());
+    }
+
+    private void appendDerivedFacts(StringBuilder sb, int status,
+                                    java.util.Map<String, String> headers, String body) {
         var result = new com.testgen.runner.DirectRequestService.DirectRunResult(
-                resp.statusCode(), 0, headers, resp.body(), null, java.util.List.of());
+                status, 0, headers, body, null, java.util.List.of());
 
         for (var a : assertionDeriver.derive(result)) {
             // Süre gerçeği burada anlamsız: gözlem gecikmesi ölçülmüyor (0 verildi)
@@ -276,6 +478,25 @@ public class ObservationService {
             log.debug("Gözlem probu başarısız ({}): {}", url, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Bölüm gerçek bir ölçüm mü taşıyor, yoksa "yapılamadı" notu mu?
+     * Üretim akışı bu ayrımı bilmeden ilerlerse ajanlar notu veriymiş gibi okur.
+     */
+    public static boolean isObserved(String section) {
+        if (section == null || section.isBlank()) return false;
+        return section.startsWith(SECTION_TITLE + " RESPONSE")
+                || section.startsWith(SECTION_TITLE + " API")
+                || (section.startsWith(SECTION_TITLE + " PAGE")
+                    && !section.contains("Sayfa gözlemi yapılamadı"));
+    }
+
+    private static String firstLine(String s) {
+        int i = s.indexOf('\n');
+        String head = i < 0 ? s : s.substring(0, i);
+        int j = s.indexOf('\n', i + 1);
+        return j < 0 ? head : head + " " + s.substring(i + 1, j);
     }
 
     private static String snippet(String body) {

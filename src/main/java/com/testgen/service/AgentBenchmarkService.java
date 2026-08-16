@@ -128,7 +128,6 @@ public class AgentBenchmarkService {
                 .iteration(iteration)
                 .requestId(saved.getId());
 
-        LocalDateTime windowStart = LocalDateTime.now();
         long started = System.currentTimeMillis();
         String error = null;
         try {
@@ -139,7 +138,6 @@ public class AgentBenchmarkService {
             log.warn("[benchmark] {} #{} üretimi başarısız: {}", arm, iteration, error);
         }
         long generationMs = System.currentTimeMillis() - started;
-        LocalDateTime windowEnd = LocalDateTime.now();
 
         List<GeneratedTestCase> cases = testCaseRepository.findByRequestId(saved.getId());
         result.caseCount(cases.size())
@@ -150,7 +148,7 @@ public class AgentBenchmarkService {
                 .generationDurationMs(generationMs)
                 .errorMessage(error);
 
-        applyLlmCost(result, windowStart, windowEnd);
+        applyLlmCost(result, saved.getId());
 
         if (run.isRunTests() && !cases.isEmpty()) {
             applyRunMetrics(result, saved.getId());
@@ -158,13 +156,10 @@ public class AgentBenchmarkService {
         return result.build();
     }
 
-    /**
-     * LLM maliyetini üretim penceresine göre atfeder.
-     * Çağrı kayıtlarında requestId yok; kollar sıralı koştuğu için pencere kesin sonuç verir.
-     */
+    /** LLM maliyetini yalnız üretim isteğinin kalıcı korelasyon kimliğine göre atfeder. */
     private void applyLlmCost(AgentBenchmarkResult.AgentBenchmarkResultBuilder result,
-                              LocalDateTime start, LocalDateTime end) {
-        List<LlmCallLog> calls = llmCallLogRepository.findByCalledAtBetween(start, end);
+                              String requestId) {
+        List<LlmCallLog> calls = llmCallLogRepository.findByRequestIdOrderByCalledAtAsc(requestId);
         result.llmCalls(calls.size())
                 .llmDurationMs(calls.stream().mapToLong(LlmCallLog::getDurationMs).sum())
                 .llmPromptChars(calls.stream().mapToLong(LlmCallLog::getPromptChars).sum());

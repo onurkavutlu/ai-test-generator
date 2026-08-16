@@ -121,7 +121,7 @@ class LlmReportControllerTest {
     @DisplayName("GET /api/v1/llm/summary — özet istatistikleri döner")
     void summaryReturnsAggregates() throws Exception {
         when(llmReportStore.summary())
-                .thenReturn(new LlmReportStore.LlmCallSummary(10, 8, 2, 320L, 12000, 4500));
+                .thenReturn(new LlmReportStore.LlmCallSummary(10, 8, 2, 320L, 3200L, 12000, 4500));
 
         mockMvc.perform(get("/api/v1/llm/summary"))
                 .andExpect(status().isOk())
@@ -153,7 +153,7 @@ class LlmReportControllerTest {
         when(testGenerationService.getRequest("req-1")).thenReturn(request);
         when(testGenerationService.getTestCasesByRequestId("req-1")).thenReturn(List.of());
         when(llmReportStore.summary())
-                .thenReturn(new LlmReportStore.LlmCallSummary(1, 1, 0, 100L, 10, 5));
+                .thenReturn(new LlmReportStore.LlmCallSummary(1, 1, 0, 100L, 100L, 10, 5));
 
         mockMvc.perform(get("/tests/req-1/llm-report"))
                 .andExpect(status().isOk())
@@ -175,7 +175,7 @@ class LlmReportControllerTest {
         when(testGenerationService.getRequest("req-2")).thenReturn(request);
         when(testGenerationService.getTestCasesByRequestId("req-2")).thenReturn(List.of());
         when(llmReportStore.summary())
-                .thenReturn(new LlmReportStore.LlmCallSummary(0, 0, 0, 0L, 0, 0));
+                .thenReturn(new LlmReportStore.LlmCallSummary(0, 0, 0, 0L, 0L, 0, 0));
 
         mockMvc.perform(get("/tests/req-2/llm-report"))
                 .andExpect(status().isOk())
@@ -191,7 +191,7 @@ class LlmReportControllerTest {
         when(testGenerationService.getRequest("req-3")).thenReturn(request);
         when(testGenerationService.getTestCasesByRequestId("req-3")).thenReturn(List.of());
         when(llmReportStore.summary())
-                .thenReturn(new LlmReportStore.LlmCallSummary(0, 0, 0, 0L, 0, 0));
+                .thenReturn(new LlmReportStore.LlmCallSummary(0, 0, 0, 0L, 0L, 0, 0));
 
         mockMvc.perform(get("/tests/req-3/llm-report"))
                 .andExpect(status().isOk())

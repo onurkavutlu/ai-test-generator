@@ -1,0 +1,13 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:v1="http://standart.turkiye.gov.tr/aboneliksorgulama/v1">
+    <soapenv:Header/>
+    <soapenv:Body>
+        <v1:subscriberInput>
+            <operatorCode>#(operatorCode)</operatorCode>
+            <username>#(username)</username>
+            <password>#(password)</password>
+            <ipAddress>#(ipAddress)</ipAddress>
+            <trIdentityNo>#(trIdentityNo)</trIdentityNo>
+            <pageNo>#(pageNo)</pageNo>
+        </v1:subscriberInput>
+    </soapenv:Body>
+</soapenv:Envelope>

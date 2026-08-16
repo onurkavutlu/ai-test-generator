@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,6 +34,8 @@ public class SoapXmlParser {
             log.warn("SOAP operasyon adı parse edilemedi: {}", e.getMessage());
         }
         
-        return Collections.singletonList(new ParsedRequestDto(operationName, "POST", "/soap-endpoint", xmlPayload));
+        // SOAP envelope endpoint taşımaz; sabit bir yol uydurmak yerine hedef çağırandan gelir.
+        return Collections.singletonList(new ParsedRequestDto(
+                operationName, "POST", null, xmlPayload, Map.of(), xmlPayload));
     }
 }

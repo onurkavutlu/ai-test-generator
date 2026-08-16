@@ -65,17 +65,25 @@ public class LlmReportController {
     @GetMapping("/api/v1/llm/calls")
     @org.springframework.web.bind.annotation.ResponseBody
     public ResponseEntity<List<Map<String, Object>>> getLlmCalls(
-            @RequestParam(required = false) String type) {
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String requestId) {
 
         // Locale.ROOT şart: Türkçe locale'de "generic".toUpperCase() → "GENERİC" olur ve
         // hiçbir kayda eşleşmez; filtre sessizce boş liste döner.
-        List<LlmCallReport> reports = type != null
-                ? llmReportStore.byType(type.toUpperCase(java.util.Locale.ROOT))
-                : llmReportStore.all();
+        List<LlmCallReport> reports;
+        if (requestId != null && !requestId.isBlank()) {
+            reports = llmReportStore.byRequest(requestId);
+        } else if (type != null) {
+            reports = llmReportStore.byType(type.toUpperCase(java.util.Locale.ROOT));
+        } else {
+            reports = llmReportStore.all();
+        }
 
         List<Map<String, Object>> result = reports.stream().map(r -> {
             java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("calledAt",              r.calledAt());
+            m.put("requestId",             r.requestId());
+            m.put("phase",                 r.phase());
             m.put("model",                 r.model());
             m.put("callType",              r.callType());
             m.put("success",               r.success());
@@ -97,8 +105,13 @@ public class LlmReportController {
                description = "Toplam çağrı sayısı, başarı oranı, ortalama süre ve tahmini token kullanımı.")
     @GetMapping("/api/v1/llm/summary")
     @org.springframework.web.bind.annotation.ResponseBody
-    public ResponseEntity<LlmReportStore.LlmCallSummary> getLlmSummary() {
-        return ResponseEntity.ok(llmReportStore.summary());
+    public ResponseEntity<LlmReportStore.LlmCallSummary> getLlmSummary(
+            @RequestParam(required = false) String requestId) {
+        // requestId verilirse yalnızca o üretimin maliyeti döner: kaç çağrı, kaç ms,
+        // kaç token. Toplam sayılar bir isteğin maliyetini göstermez.
+        return ResponseEntity.ok(requestId == null || requestId.isBlank()
+                ? llmReportStore.summary()
+                : llmReportStore.summaryFor(requestId));
     }
 
     // ── Yardımcılar ───────────────────────────────────────────

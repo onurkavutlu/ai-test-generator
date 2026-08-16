@@ -7,7 +7,8 @@ Feature: API functional Test Suite (System Level)
     * header Content-Type = 'application/json'
 
   Scenario: Test generation request lifecycle with manual test case
-    # 1. Create a generation request (autoRun=false; async LLM üretimi bu testin kapsamı dışında)
+    # 1. Create a generation request (autoRun=false yalnız otomatik koşumu kapatır;
+    #    async üretim yine başlar ve senaryo sonunda terminal durumu beklenir)
     Given path '/api/v1/tests/generate'
     And param autoRun = false
     And request { testType: 'BACKEND_API', framework: 'KARATE', userStory: 'Sistem testi: manuel case akisi' }
@@ -35,14 +36,22 @@ Feature: API functional Test Suite (System Level)
     Given path '/api/v1/tests/' + requestId + '/cases'
     When method GET
     Then status 200
-    And match response == '#[1]'
-    And match response[0].testName == 'ManualSmokeTest'
+    And match response[*].testName contains 'ManualSmokeTest'
 
     # 5. Tüm istekler listesinde bu request yer almalı
     Given path '/api/v1/tests'
     When method GET
     Then status 200
     And match response[*].id contains requestId
+
+    # 6. Spring test bağlamı kapanmadan async üretim bitmeli; aksi halde agent işi
+    #    Surefire fork JVM'inde askıda kalır.
+    * configure retry = { count: 100, interval: 100 }
+    Given path '/api/v1/tests/' + requestId
+    And retry until response.status == 'GENERATED' || response.status == 'FAILED'
+    When method GET
+    Then status 200
+    And match response.status == '#? _ == "GENERATED" || _ == "FAILED"'
 
   Scenario: Incompatible framework is rejected with 400
     Given path '/api/v1/tests/generate'

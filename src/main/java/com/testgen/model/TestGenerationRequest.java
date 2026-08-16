@@ -85,6 +85,54 @@ public class TestGenerationRequest {
     @Builder.Default
     private boolean autoGenerateOnFailure = false;
 
+    // NOT: Burada kısa süre `observeMutating` alanı vardı — yan etkili isteklerin
+    // gözlemlenmesi için kullanıcı onayı isteniyordu. Kaldırıldı: isteği kullanıcı
+    // zaten kendisi veriyor, onay istemek Postman'de Send'e bastıktan sonra "emin
+    // misin" diye sormak gibiydi. Onay kuralı isteğin metoduna değil KAYNAĞINA bağlı
+    // ve doğru yerde uygulanıyor (Swagger taraması yalnızca yan etkisiz problar).
+    //
+    // Veritabanındaki observe_mutating sütunu duruyor; Hibernate `update` sütun
+    // düşürmez ve düşürmek için yeni bir şema göçü gerekirdi. Sütunun varsayılanı
+    // false, kimse yazmıyor, kimse okumuyor — zararsız.
+
+    // ── Gözlem kanıtı ────────────────────────────────────────────────────────
+    // Üretilen her assertion'ın dayanağı. Saklanmazsa kullanıcı, testin neye göre
+    // yazıldığını göremez; "bu iddia nereden çıktı" sorusu cevapsız kalır.
+
+    /** "POST https://host/path" — gözlemlenen isteğin özeti. */
+    @Column(columnDefinition = "TEXT")
+    private String observedRequestLine;
+
+    /** Gerçekten dönen HTTP durum kodu. */
+    private Integer observedStatus;
+
+    /** Gerçekten ölçülen süre (ms). SLA yalnızca bu değerden türetilebilir. */
+    private Long observedDurationMs;
+
+    /** Yanıt gövdesi — kısaltılmamış hâliyle saklanır. */
+    @Column(columnDefinition = "TEXT")
+    private String observedBody;
+
+    /** Gerçek response header'ları — satır başına bir başlık. */
+    @Column(columnDefinition = "TEXT")
+    private String observedResponseHeaders;
+
+    /** Set-Cookie başlıklarından çıkarılan cookie'ler — satır başına bir cookie. */
+    @Column(columnDefinition = "TEXT")
+    private String observedResponseCookies;
+
+    /** UTF-8 yanıt gövdesinin byte cinsinden ölçülen boyutu. */
+    private Long observedResponseSizeBytes;
+
+    /** HTTP_1_1 veya HTTP_2. */
+    private String observedHttpVersion;
+
+    /** Gözlem yapılamadıysa nedeni; yapıldıysa null. */
+    @Column(columnDefinition = "TEXT")
+    private String observationSkipReason;
+
+    private LocalDateTime observedAt;
+
     /**
      * Çok-ajanlı analiz adımı bu istek için koşulsun mu?
      *
