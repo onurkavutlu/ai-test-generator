@@ -44,6 +44,8 @@ public class CurlParser {
     private static final Pattern BODY_DQ =
             Pattern.compile("(?:-d|--data|--data-raw|--data-binary|--data-ascii)\\s+\"(.*?)\"(?=\\s*(?:\\\\\\s*)?(?:-{1,2}[A-Za-z]|$))",
                     Pattern.DOTALL);
+    private static final Pattern HEAD_FLAG =
+            Pattern.compile("(?:^|\\s)(?:-I|--head)(?:\\s|$)");
 
     /** Yan etkisiz kabul edilen metotlar — kullanıcı onayı olmadan gözlemlenebilir. */
     private static final List<String> SAFE_METHODS = List.of("GET", "HEAD", "OPTIONS");
@@ -107,14 +109,21 @@ public class CurlParser {
         return null;
     }
 
-    /**
-     * cURL'ün kendi kuralı: {@code -X} verilmemişse gövde varsa POST, yoksa GET.
-     * Eski kod bu kuralı bilmediği için gövdeli istekleri GET sanıyordu.
-     */
+    /** cURL'ün yöntem seçme önceliğini uygular. */
     private static String extractMethod(String raw, String body) {
         Matcher m = METHOD.matcher(raw);
         if (m.find()) return m.group(2).toUpperCase(Locale.ROOT);
+        if (HEAD_FLAG.matcher(raw).find()) return "HEAD";
         return (body != null && !body.isBlank()) ? "POST" : "GET";
+    }
+
+    /** Arayüzde kullanıcıya yöntemin neden seçildiğini açıklar. */
+    public static String describeMethodDetection(String raw) {
+        if (raw == null) return "cURL varsayılanı";
+        if (METHOD.matcher(raw).find()) return "-X/--request ile açıkça belirtildi";
+        if (HEAD_FLAG.matcher(raw).find()) return "-I/--head bulundu";
+        if (extractBody(raw) != null) return "gövde parametresi bulundu; cURL varsayılanı POST";
+        return "metot ve gövde yok; cURL varsayılanı GET";
     }
 
     private static String buildPayloadDetails(String method, String url,

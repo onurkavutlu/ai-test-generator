@@ -113,6 +113,20 @@ public class TestGenerationRequest {
     @Column(columnDefinition = "TEXT")
     private String observedBody;
 
+    /** Gerçek response header'ları — satır başına bir başlık. */
+    @Column(columnDefinition = "TEXT")
+    private String observedResponseHeaders;
+
+    /** Set-Cookie başlıklarından çıkarılan cookie'ler — satır başına bir cookie. */
+    @Column(columnDefinition = "TEXT")
+    private String observedResponseCookies;
+
+    /** UTF-8 yanıt gövdesinin byte cinsinden ölçülen boyutu. */
+    private Long observedResponseSizeBytes;
+
+    /** HTTP_1_1 veya HTTP_2. */
+    private String observedHttpVersion;
+
     /** Gözlem yapılamadıysa nedeni; yapıldıysa null. */
     @Column(columnDefinition = "TEXT")
     private String observationSkipReason;

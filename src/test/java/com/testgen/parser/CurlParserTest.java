@@ -90,6 +90,14 @@ class CurlParserTest {
     }
 
     @Test
+    @DisplayName("-I metodu HEAD yapar")
+    void headFlagSelectsHead() {
+        ParsedRequestDto r = parser.parse("curl -I 'https://ornek.local/health'");
+
+        assertEquals("HEAD", r.method());
+    }
+
+    @Test
     @DisplayName("URL yoksa null döner — uydurma URL üretilmez")
     void missingUrlReturnsNull() {
         assertNull(parser.parse("curl -X POST --data '{}'"));

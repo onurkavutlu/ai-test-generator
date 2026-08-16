@@ -49,6 +49,8 @@ class ObservationPersistenceTest {
         server.createContext("/echo", ex -> {
             byte[] out = "{\"durum\":\"tamam\"}".getBytes(StandardCharsets.UTF_8);
             ex.getResponseHeaders().add("Content-Type", "application/json");
+            ex.getResponseHeaders().add("X-Trace-Id", "trace-123");
+            ex.getResponseHeaders().add("Set-Cookie", "SESSION=test-session; Path=/; HttpOnly");
             ex.sendResponseHeaders(201, out.length);
             try (OutputStream os = ex.getResponseBody()) { os.write(out); }
             ex.close();
@@ -77,6 +79,12 @@ class ObservationPersistenceTest {
         assertNotNull(req.getObservedDurationMs(), "Süre ölçülmedi — SLA türetilemez");
         assertTrue(req.getObservedDurationMs() >= 0);
         assertTrue(req.getObservedBody().contains("tamam"), req.getObservedBody());
+        assertTrue(req.getObservedResponseHeaders().contains("x-trace-id: trace-123"),
+                req.getObservedResponseHeaders());
+        assertTrue(req.getObservedResponseCookies().contains("SESSION=test-session"),
+                req.getObservedResponseCookies());
+        assertTrue(req.getObservedResponseSizeBytes() > 0);
+        assertNotNull(req.getObservedHttpVersion());
         assertTrue(req.getObservedRequestLine().startsWith("POST "), req.getObservedRequestLine());
         assertNotNull(req.getObservedAt());
         assertNull(req.getObservationSkipReason(), "Başarılı gözlemde atlama nedeni olmamalı");

@@ -139,6 +139,10 @@ public class TestGenerationService {
             fresh.setObservedStatus(observed.getObservedStatus());
             fresh.setObservedDurationMs(observed.getObservedDurationMs());
             fresh.setObservedBody(observed.getObservedBody());
+            fresh.setObservedResponseHeaders(observed.getObservedResponseHeaders());
+            fresh.setObservedResponseCookies(observed.getObservedResponseCookies());
+            fresh.setObservedResponseSizeBytes(observed.getObservedResponseSizeBytes());
+            fresh.setObservedHttpVersion(observed.getObservedHttpVersion());
             fresh.setObservationSkipReason(observed.getObservationSkipReason());
             fresh.setObservedAt(observed.getObservedAt());
         });

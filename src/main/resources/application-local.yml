@@ -31,6 +31,11 @@ management:
       enabled: false
 
 test-generator:
+  observation:
+    # GEÇİCİ: mobil-test kurumsal CA zinciri yerel JDK truststore'unda olmadığı için
+    # yalnızca local profilde sertifika zinciri doğrulamasını kapatır.
+    # Kurumsal CA truststore'a eklenince false yapılmalıdır.
+    insecure-ssl: ${OBSERVATION_INSECURE_SSL:true}
   seeding:
     enabled: true
   selenium:

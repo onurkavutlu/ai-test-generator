@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -21,6 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -237,12 +239,50 @@ class DashboardSeleniumE2ETest {
         assertFalse(latency.isBlank(), "Gecikme ölçümü gösterilmedi");
     }
 
+    @Test
+    @Order(6)
+    @DisplayName("Runner: Postman cURL metodu algılanır ve response sekmeleri çalışır")
+    void runnerInfersCurlMethodAndRendersResponseTabs() {
+        openDashboard();
+        switchTo("runner");
+
+        WebElement raw = driver.findElement(By.id("runner-rawPayload"));
+        raw.sendKeys("curl --location 'http://localhost:" + port
+                + "/api/v1/tests/health' --data '{}'");
+
+        WebElement analysis = wait.until(
+                ExpectedConditions.visibilityOfElementLocated(By.id("runner-curl-analysis")));
+        assertTrue(analysis.getText().contains("POST"),
+                "--data içeren cURL POST olarak gösterilmedi: " + analysis.getText());
+
+        ((JavascriptExecutor) driver).executeScript("runnerRenderObservation(arguments[0])", Map.of(
+                "observedStatus", 200,
+                "observedDurationMs", 42,
+                "observedRequestLine", "POST https://example.test/soap",
+                "observedBody", "<Envelope><Body><result>OK</result></Body></Envelope>",
+                "observedResponseHeaders", "content-type: text/xml\nx-trace-id: trace-1",
+                "observedResponseCookies", "SESSION=abc; Path=/; HttpOnly",
+                "observedResponseSizeBytes", 57,
+                "observedHttpVersion", "HTTP_2"
+        ));
+
+        wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("runner-observed-section")));
+        assertTrue(driver.findElement(By.id("runner-observed-section")).getText().contains("HTTP 200"));
+        assertTrue(driver.findElement(By.id("runner-response-pane-body")).getText().contains("<Envelope>"));
+
+        driver.findElement(By.cssSelector("button[data-tab='headers']")).click();
+        assertTrue(driver.findElement(By.id("runner-response-pane-headers")).getText().contains("x-trace-id"));
+
+        driver.findElement(By.cssSelector("button[data-tab='cookies']")).click();
+        assertTrue(driver.findElement(By.id("runner-response-pane-cookies")).getText().contains("SESSION=abc"));
+    }
+
     /**
      * SSRF kapısı ürün davranışıdır ve kullanıcıya <b>anlaşılır</b> görünmelidir.
      * Sunucu 400 + açıklayıcı mesaj döner; ekranda "sistem bozuk" izlenimi doğmamalı.
      */
     @Test
-    @Order(6)
+    @Order(7)
     @DisplayName("Runner: engellenen adres kullanıcıya açıklamasıyla bildirilir")
     void runnerShowsBlockedAddressExplanation() {
         openDashboard();
@@ -262,7 +302,7 @@ class DashboardSeleniumE2ETest {
     }
 
     @Test
-    @Order(7)
+    @Order(8)
     @DisplayName("Sistem Logları görünümü log satırlarını gösterir")
     void systemLogsViewRendersLines() {
         openDashboard();
@@ -289,7 +329,7 @@ class DashboardSeleniumE2ETest {
      * Geriye yalnızca gerçek JS istisnaları kalır — sayfayı bozan tek şey odur.
      */
     @Test
-    @Order(8)
+    @Order(9)
     @DisplayName("Gezinme sırasında tarayıcı konsolunda JS istisnası oluşmaz")
     void noJavaScriptErrorsWhileNavigating() {
         openDashboard();

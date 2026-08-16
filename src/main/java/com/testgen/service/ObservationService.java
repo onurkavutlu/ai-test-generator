@@ -7,18 +7,26 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * "Önce Gözlemle" adımı — üretim hattının ilk halkası.
@@ -77,10 +85,56 @@ public class ObservationService {
     private static final Pattern HTML_TITLE = Pattern.compile("<title>(.*?)</title>", Pattern.DOTALL);
     private static final Pattern HTML_ID = Pattern.compile("<(input|button|select|textarea|form|a)\\b[^>]*\\bid=[\"']([^\"']+)[\"']");
 
-    private final HttpClient client = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+    /**
+     * Yalnızca güvenilen yerel test ortamlarında kullanılacak geçici kaçış anahtarı.
+     * Varsayılan kapalıdır; local profil, kurumsal CA truststore'a eklenene kadar açar.
+     */
+    @Value("${test-generator.observation.insecure-ssl:false}")
+    private boolean insecureSsl;
+
+    private HttpClient client = buildHttpClient(false);
+
+    @PostConstruct
+    void configureHttpClient() {
+        client = buildHttpClient(insecureSsl);
+        if (insecureSsl) {
+            log.warn("⚠️  GÖZLEM SSL SERTİFİKA DOĞRULAMASI KAPALI — yalnızca yerel test ortamında kullanın");
+        }
+    }
+
+    static HttpClient buildHttpClient(boolean insecureSsl) {
+        HttpClient.Builder builder = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .followRedirects(HttpClient.Redirect.NORMAL);
+
+        if (!insecureSsl) {
+            return builder.build();
+        }
+
+        try {
+            X509TrustManager trustAll = new X509TrustManager() {
+                @Override
+                public void checkClientTrusted(X509Certificate[] chain, String authType) {
+                    // Geçici local profil seçeneği: istemci sertifikası doğrulanmaz.
+                }
+
+                @Override
+                public void checkServerTrusted(X509Certificate[] chain, String authType) {
+                    // Geçici local profil seçeneği: sunucu sertifika zinciri doğrulanmaz.
+                }
+
+                @Override
+                public X509Certificate[] getAcceptedIssuers() {
+                    return new X509Certificate[0];
+                }
+            };
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, new TrustManager[]{trustAll}, new SecureRandom());
+            return builder.sslContext(sslContext).build();
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Güvensiz gözlem SSL istemcisi oluşturulamadı", e);
+        }
+    }
 
     /**
      * İsteğin hedefinden gözlem toplar ve additionalContext'e OBSERVED bölümü ekler.
@@ -216,6 +270,10 @@ public class ObservationService {
         request.setObservedStatus(observed.status());
         request.setObservedDurationMs(observed.durationMs());
         request.setObservedBody(observed.body());
+        request.setObservedResponseHeaders(observed.headerLines());
+        request.setObservedResponseCookies(observed.cookieLines());
+        request.setObservedResponseSizeBytes(observed.responseSizeBytes());
+        request.setObservedHttpVersion(observed.httpVersion());
         request.setObservationSkipReason(null);
         request.setObservedAt(java.time.LocalDateTime.now());
     }
@@ -227,15 +285,22 @@ public class ObservationService {
         request.setObservedStatus(null);
         request.setObservedDurationMs(null);
         request.setObservedBody(null);
+        request.setObservedResponseHeaders(null);
+        request.setObservedResponseCookies(null);
+        request.setObservedResponseSizeBytes(null);
+        request.setObservedHttpVersion(null);
         request.setObservationSkipReason(reason);
         request.setObservedAt(java.time.LocalDateTime.now());
     }
 
     /** Gözlem sonucu: gerçekten ölçülen değerler ya da hatanın kendisi. */
     private record Observed(boolean ok, String error, int status, long durationMs,
-                            java.util.Map<String, String> headers, String body) {
+                            java.util.Map<String, String> headers, String body,
+                            String headerLines, String cookieLines,
+                            long responseSizeBytes, String httpVersion) {
         static Observed fail(String error) {
-            return new Observed(false, error, 0, 0, java.util.Map.of(), null);
+            return new Observed(false, error, 0, 0, java.util.Map.of(), null,
+                    "", "", 0, null);
         }
     }
 
@@ -273,7 +338,17 @@ public class ObservationService {
                 if (!k.startsWith(":")) headers.put(k, String.join(", ", v));
             });
 
-            return new Observed(true, null, resp.statusCode(), durationMs, headers, resp.body());
+            String headerLines = resp.headers().map().entrySet().stream()
+                    .filter(e -> !e.getKey().startsWith(":"))
+                    .flatMap(e -> e.getValue().stream().map(v -> e.getKey() + ": " + v))
+                    .collect(java.util.stream.Collectors.joining("\n"));
+            String cookieLines = String.join("\n", resp.headers().allValues("set-cookie"));
+            String responseBody = resp.body();
+            long responseSize = responseBody == null ? 0
+                    : responseBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+
+            return new Observed(true, null, resp.statusCode(), durationMs, headers, responseBody,
+                    headerLines, cookieLines, responseSize, resp.version().name());
 
         } catch (Exception e) {
             String reason = e.getClass().getSimpleName()

@@ -55,6 +55,9 @@ llm:
     num-predict: ${OLLAMA_NUM_PREDICT:2048}
 
 test-generator:
+  observation:
+    # Üretim/Docker varsayılanı güvenlidir. Yalnızca kontrollü test ortamında açın.
+    insecure-ssl: ${OBSERVATION_INSECURE_SSL:false}
   generation:
     # Bir istekte üretilecek varsayılan en fazla case sayısı.
     # 0 = sınır yok (Swagger'daki her endpoint için case üretilir).
