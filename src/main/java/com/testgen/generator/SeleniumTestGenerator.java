@@ -22,12 +22,18 @@ import java.util.regex.Pattern;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class SeleniumTestGenerator {
+public class SeleniumTestGenerator implements FrameworkTestGenerator {
 
     private final LlmService llmService;
     private final GeneratedJavaTestProjectService javaTestProjectService;
     private final GenerationLimit generationLimit;
 
+    @Override
+    public TestFramework framework() {
+        return TestFramework.SELENIUM;
+    }
+
+    @Override
     public List<GeneratedTestCase> generate(TestGenerationRequest request) {
         List<GeneratedTestCase> results = new ArrayList<>();
 

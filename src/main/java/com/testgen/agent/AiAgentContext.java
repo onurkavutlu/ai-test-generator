@@ -4,6 +4,7 @@ import com.testgen.model.TestGenerationRequest;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class AiAgentContext {
@@ -24,7 +25,15 @@ public class AiAgentContext {
     }
 
     public void addResult(AiAgentResult result) {
+        Objects.requireNonNull(result, "result");
+        if (hasResult(result.role())) {
+            throw new IllegalStateException("Agent sonucu zaten kayıtlı: " + result.role());
+        }
         results.add(result);
+    }
+
+    public boolean hasResult(AiAgentRole role) {
+        return results.stream().anyMatch(result -> result.role() == role);
     }
 
     /** Bir sonraki ajana taşınacak en fazla önceki çıktı sayısı. */

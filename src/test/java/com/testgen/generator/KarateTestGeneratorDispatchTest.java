@@ -135,9 +135,13 @@ class KarateTestGeneratorDispatchTest {
                     parsed("pets", "POST", "http://localhost:8080/graphql")));
 
             generator.generate(request().rawPayload("query { pets { id } }")
-                    .payloadType("GRAPHQL").build());
+                    .payloadType("GRAPHQL")
+                    .applicationUrl("https://api.example.test/graphql")
+                    .build());
 
             verify(graphqlParser).parse(anyString());
+            verify(llmService).generateFromGraphQL(
+                    org.mockito.ArgumentMatchers.contains("https://api.example.test/graphql"), anyString());
         }
 
         @Test
@@ -146,9 +150,42 @@ class KarateTestGeneratorDispatchTest {
             when(soapXmlParser.parse(anyString())).thenReturn(List.of(
                     parsed("GetPet", "POST", "http://localhost:8080/soap")));
 
-            generator.generate(request().rawPayload("<soap:Envelope/>").payloadType("SOAP").build());
+            generator.generate(request().rawPayload("<soap:Envelope/>")
+                    .payloadType("SOAP")
+                    .applicationUrl("https://api.example.test/soap")
+                    .build());
 
             verify(soapXmlParser).parse(anyString());
+            verify(llmService).generateFromSoap(
+                    org.mockito.ArgumentMatchers.contains("https://api.example.test/soap"), anyString());
+        }
+
+        @Test
+        @DisplayName("GraphQL hedefi verilmediyse /graphql uydurulmaz")
+        void graphqlWithoutExplicitEndpointIsRejected() {
+            var error = org.junit.jupiter.api.Assertions.assertThrows(
+                    com.testgen.config.BadRequestException.class,
+                    () -> generator.generate(request()
+                            .rawPayload("query { pets { id } }")
+                            .payloadType("GRAPHQL")
+                            .build()));
+
+            assertTrue(error.getMessage().contains("gerçek endpoint zorunludur"));
+            verify(graphqlParser, never()).parse(anyString());
+        }
+
+        @Test
+        @DisplayName("SOAP hedefi verilmediyse /soap-endpoint uydurulmaz")
+        void soapWithoutExplicitEndpointIsRejected() {
+            var error = org.junit.jupiter.api.Assertions.assertThrows(
+                    com.testgen.config.BadRequestException.class,
+                    () -> generator.generate(request()
+                            .rawPayload("<soap:Envelope/>")
+                            .payloadType("SOAP")
+                            .build()));
+
+            assertTrue(error.getMessage().contains("gerçek endpoint zorunludur"));
+            verify(soapXmlParser, never()).parse(anyString());
         }
 
         /**
@@ -175,6 +212,20 @@ class KarateTestGeneratorDispatchTest {
             verify(llmService).generateFromRawPayload(anyString(), anyString(), anyString());
             verify(harParser, never()).parse(anyString());
             verify(apiCollectionParser, never()).parse(anyString());
+        }
+
+        @Test
+        @DisplayName("Endpoint ve metot taşımayan JSON raw yük generic teste düşmez")
+        void jsonBodyWithoutHttpRequestIsRejected() {
+            var error = org.junit.jupiter.api.Assertions.assertThrows(
+                    com.testgen.service.TestGenerationException.class,
+                    () -> generator.generate(request()
+                            .rawPayload("{\"name\":\"Mavi\"}")
+                            .payloadType("JSON")
+                            .build()));
+
+            assertTrue(error.getMessage().contains("henüz desteklenmiyor: JSON"));
+            verify(llmService, never()).generateFromRawPayload(anyString(), anyString(), anyString());
         }
 
         @Test

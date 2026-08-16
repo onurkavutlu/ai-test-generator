@@ -61,7 +61,8 @@ public abstract class AbstractLlmAgent implements AiAgent {
                 - Konudan sapma; yalnızca verilen user story, framework, URL/package ve ek bağlam üzerinden konuş.
                 - Başka role ait işleri devralma; kendi rolünün karar, risk, veri veya aksiyonlarını üret.
                 - Önceki agent çıktılarıyla çelişme; gerekiyorsa onları netleştir veya tamamla.
-                - Belirsiz endpoint, selector, veri veya ortam bilgisi uydurma; varsayım gerekiyorsa "varsayım" diye açık yaz.
+                - Belirsiz endpoint, selector, veri, status, SLA veya ortam bilgisi uydurma.
+                - Kanıtı verilmeyen bilgi için varsayım yapma; açıkça "bilinmiyor" yaz.
                 - Çıktın bir sonraki agent tarafından doğrudan kullanılabilir olmalı.
                 - Test datası, test üretimi veya raporlama için doğrudan kullanılabilir somut bilgi ver.
                 - Markdown kod bloğu kullanma.

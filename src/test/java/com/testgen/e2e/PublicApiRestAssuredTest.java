@@ -6,6 +6,7 @@ import io.restassured.response.Response;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.net.HttpURLConnection;
@@ -31,6 +32,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <p>Ağ yoksa testler atlanır, kırmızı yanmaz — gerekçe için bkz. {@link PublicApiKarateTest}.
  */
 @DisplayName("Public API (restful-api.dev) — REST Assured")
+@Tag("external")
 class PublicApiRestAssuredTest {
 
     private static final String BASE_URL = "https://api.restful-api.dev";

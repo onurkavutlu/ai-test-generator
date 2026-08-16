@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -17,6 +18,11 @@ public class GraphQLParser {
     private final ObjectMapper objectMapper;
 
     public List<ParsedRequestDto> parse(String jsonPayload) {
+        String stripped = jsonPayload == null ? "" : jsonPayload.strip();
+        if (!stripped.startsWith("{")) {
+            return rawQuery(jsonPayload);
+        }
+
         try {
             JsonNode root = objectMapper.readTree(jsonPayload);
             
@@ -34,11 +40,17 @@ public class GraphQLParser {
             
             String details = String.format("Query:\n%s\n\nVariables:\n%s", query, variables);
             
-            return Collections.singletonList(new ParsedRequestDto(operationName, "POST", "/graphql", details));
+            // Endpoint payload içinde yoktur; çağıran katman açık hedef sağlamalıdır.
+            return Collections.singletonList(new ParsedRequestDto(
+                    operationName, "POST", null, details, Map.of(), jsonPayload));
         } catch (Exception e) {
-            log.error("GraphQL parse hatası (belki düz metin query'dir)", e);
-            // Düz metin olarak değerlendir
-            return Collections.singletonList(new ParsedRequestDto("Raw_GraphQL_Query", "POST", "/graphql", jsonPayload));
+            log.warn("GraphQL JSON parse edilemedi; ham payload korunuyor: {}", e.getMessage());
+            return rawQuery(jsonPayload);
         }
+    }
+
+    private List<ParsedRequestDto> rawQuery(String payload) {
+        return Collections.singletonList(new ParsedRequestDto(
+                "Raw_GraphQL_Query", "POST", null, payload, Map.of(), payload));
     }
 }

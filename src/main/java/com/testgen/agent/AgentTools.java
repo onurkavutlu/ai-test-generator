@@ -1,19 +1,16 @@
 package com.testgen.agent;
 
-import com.testgen.model.TestGenerationRequest;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
+import java.util.Objects;
 
 @Slf4j
-@RequiredArgsConstructor
 public class AgentTools {
 
-    private final TestGenerationRequest request;
-    private final List<AiAgent> agents;
+    private final AiAgentRegistry agentRegistry;
     private final AiAgentContext context;
 
     /**
@@ -25,6 +22,13 @@ public class AgentTools {
      * gerekçesi döndürülür — istisna fırlatılmaz ki Supervisor akışı bozulmasın.
      */
     private final List<AiAgentRole> allowedRoles;
+
+    public AgentTools(AiAgentRegistry agentRegistry, AiAgentContext context,
+                      List<AiAgentRole> allowedRoles) {
+        this.agentRegistry = Objects.requireNonNull(agentRegistry, "agentRegistry");
+        this.context = Objects.requireNonNull(context, "context");
+        this.allowedRoles = List.copyOf(Objects.requireNonNull(allowedRoles, "allowedRoles"));
+    }
 
     @Tool("Ürün yöneticisi (Product Manager) ajanına danış. İş kuralları, kabul kriterleri ve riskler hakkında analiz talep et.")
     public String askProductManager(@P("Ajana iletilecek kısa analiz odağı") String focus) {
@@ -78,11 +82,7 @@ public class AgentTools {
         }
 
         log.info("Supervisor → {} ajanına danışıyor (odak: {})", role, focus);
-        AiAgent agent = agents.stream()
-                .filter(a -> a.role() == role)
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("Agent not found: " + role));
-
+        AiAgent agent = agentRegistry.required(role);
         AiAgentResult result = agent.analyze(context);
         context.addResult(result);
         return result.output();

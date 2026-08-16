@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
  * Ölçüm koşumunda tek bir üretimin (bir kol × bir tekrar) sonucu.
  *
  * Tüm sayılar ölçülmüştür: doğrulama sonuçları makine (parser/derleyici) çıktısından,
- * LLM maliyeti üretim penceresindeki çağrı kayıtlarından gelir.
+ * LLM maliyeti üretim isteği kimliğiyle korele edilmiş çağrı kayıtlarından gelir.
  */
 @Entity
 @Table(name = "agent_benchmark_results")

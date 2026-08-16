@@ -1,5 +1,7 @@
 package com.testgen.llm;
 
+import com.testgen.parser.ParsedRequestDto;
+
 /**
  * LLM prompt şablonları — ISTQB standartlarına uyumlu test üretimi için.
  *
@@ -277,6 +279,45 @@ public final class PromptTemplates {
                                 .formatted(method, endpoint, boundContext(context), truncateSpec(swaggerContent), ISTQB_RULES);
         }
 
+        /** REST Assured için ayrıştırılmış HTTP isteği; serbest metinden yeniden parse edilmez. */
+        public static String buildRestAssuredRawPayloadPrompt(ParsedRequestDto request, String context) {
+                String observed = boundContext(context);
+                return """
+                                Write one REST Assured Java test class using JUnit 5 for the exact parsed HTTP request below.
+
+                                Method: %s
+                                URL: %s
+                                Headers: %s
+                                Body: %s
+
+                                Parsed source evidence:
+                                %s
+
+                                Observed evidence/context:
+                                %s
+
+                                Requirements:
+                                - MUST start with exactly: package com.testgen.generated;
+                                - Use only JUnit 5, REST Assured and Hamcrest APIs.
+                                - Send the exact method, URL, headers and body shown above.
+                                - Do not add, remove or alter authorization/header/body values.
+                                - Do not invent endpoint paths, request fields, expected status codes, response fields,
+                                  negative variants, performance thresholds or authentication scenarios.
+                                - Assert a status/header/body/value ONLY when it exists in the observed evidence.
+                                - If no response fact was observed, execute only the exact request and add no fabricated assertion.
+                                - Use a public class whose name ends with Test and valid JUnit 5 @Test methods.
+
+                                Return ONLY Java code. No explanation.
+                                """.formatted(
+                                request.method(),
+                                request.url(),
+                                request.headers(),
+                                request.body() == null ? "(body yok)" : request.body(),
+                                request.payloadDetails() == null || request.payloadDetails().isBlank()
+                                        ? "(kaynak ayrıntısı yok)" : request.payloadDetails(),
+                                observed.isBlank() ? "(gözlem yok)" : observed);
+        }
+
         // ─────────────────────────────────────────────────────────
         // CAPTURED RESPONSE → gözlem-temelli dar senaryo seti
         // ─────────────────────────────────────────────────────────
@@ -335,8 +376,7 @@ public final class PromptTemplates {
                                 - Analyze the payload to determine the endpoint URL, method, headers, and body.
                                 - Use Karate DSL syntax (Feature, Background, Scenario).
                                 - Background: set baseUrl to the actual endpoint extracted from the payload, configure headers.
-                                - Generate a test scenario that sends this exact request to the real endpoint and asserts a successful response (e.g., status 200/201).
-                                - Generate negative/edge case scenarios based on the input structure (e.g., missing fields).
+                                - Send this exact request to the real endpoint.
                                 - APPLICABILITY RULE (CRITICAL): The scenario lists below are TEMPLATES.
                                   Only generate scenarios that genuinely apply to the target.
                                   If the Context explicitly states something does not exist or must not be tested
@@ -346,11 +386,9 @@ public final class PromptTemplates {
                                   only when the OpenAPI excerpt declares it or the Context states it. If the spec
                                   declares only 200, do NOT write 400/401/404/500 scenarios for that endpoint —
                                   omit them. An endpoint with no documented auth has no 401 scenario.
-                                - Include these scenarios (only the applicable ones):
-                                  1. [SMOKE][P0_BLOCKER][EP] Happy path — send the exact payload and verify success
-                                  2. [REGRESSION][P1_CRITICAL][EP] Modify the payload with different valid variations
-                                  3. [NEGATIVE][P1_CRITICAL][EG] Send missing/invalid fields and expect validation errors (400)
-                                  4. [SECURITY][P0_BLOCKER][EG] Test without authorization headers (401)
+                                - Do not modify the request, generate negative variants, remove auth, or invent status codes.
+                                - Assert only status/header/body values present in Context as observed facts.
+                                - If Context has no observed response fact, execute the exact request without fabricated assertions.
                                 - Her senaryoda yapay zeka üretimi olduğunu belirtmek için mutlaka @testCaseLLM tag'ini ekle.
                                 
                                 %s
@@ -375,12 +413,11 @@ public final class PromptTemplates {
 
                                 Requirements:
                                 - Use Karate DSL syntax.
-                                - Background: set baseUrl to the GraphQL endpoint (usually '/graphql').
+                                - Use exactly the user-provided endpoint in Request Details; never default to '/graphql'.
                                 - Request body must include 'query' and 'variables' correctly as JSON.
                                 - Method must be POST.
-                                - Generate a test scenario that asserts the response structure.
-                                - Ensure to verify: `match response.data != null` and `match response.errors == '#notpresent'`.
-                                - Generate at least one negative scenario (e.g. invalid query or missing variable).
+                                - Assert response status, data or errors only when they are present in Context as observed facts.
+                                - Do not invent negative variants, missing variables, status codes or response fields.
                                 - Her senaryoda yapay zeka üretimi olduğunu belirtmek için mutlaka @testCaseLLM tag'ini ekle.
                                 
                                 %s
@@ -405,13 +442,12 @@ public final class PromptTemplates {
 
                                 Requirements:
                                 - Use Karate DSL syntax.
-                                - Background: set baseUrl to the SOAP endpoint.
+                                - Use exactly the user-provided endpoint in SOAP Payload details; never invent a path.
                                 - Set header `Content-Type = 'text/xml;charset=UTF-8'`.
                                 - Pass the SOAP Payload as the request body.
                                 - Method must be POST.
-                                - Generate a test scenario that asserts the response XML structure.
-                                - Use Karate's XML validation features (e.g., `match response /Envelope/Body...`).
-                                - Generate at least one negative scenario (e.g. invalid envelope or missing mandatory tag).
+                                - Assert response status or XML structure only when present in Context as observed facts.
+                                - Do not invent an XML response path, status, invalid envelope or missing-tag scenario.
                                 - Her senaryoda yapay zeka üretimi olduğunu belirtmek için mutlaka @testCaseLLM tag'ini ekle.
                                 
                                 %s
@@ -456,5 +492,3 @@ public final class PromptTemplates {
         }
 
 }
-
-

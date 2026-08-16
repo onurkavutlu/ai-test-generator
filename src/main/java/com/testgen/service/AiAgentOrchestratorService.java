@@ -1,8 +1,8 @@
 package com.testgen.service;
 
 import com.testgen.agent.AgentTools;
-import com.testgen.agent.AiAgent;
 import com.testgen.agent.AiAgentContext;
+import com.testgen.agent.AiAgentRegistry;
 import com.testgen.agent.AiAgentResult;
 import com.testgen.agent.AiAgentRole;
 import com.testgen.agent.SupervisorAgent;
@@ -22,7 +22,7 @@ public class AiAgentOrchestratorService {
 
     public static final String SECTION_TITLE = "## AI AGENT ANALYSIS";
 
-    private final List<AiAgent> agents;
+    private final AiAgentRegistry agentRegistry;
     private final ChatLanguageModel chatModel;
     private final AgentAnalysisRepository agentAnalysisRepository;
 
@@ -33,9 +33,9 @@ public class AiAgentOrchestratorService {
     @org.springframework.beans.factory.annotation.Value("${test-generator.agents.mode:LEAN}")
     private com.testgen.agent.AgentRouting.Mode agentMode = com.testgen.agent.AgentRouting.Mode.LEAN;
 
-    public AiAgentOrchestratorService(List<AiAgent> agents, ChatLanguageModel chatModel,
+    public AiAgentOrchestratorService(AiAgentRegistry agentRegistry, ChatLanguageModel chatModel,
                                       AgentAnalysisRepository agentAnalysisRepository) {
-        this.agents = agents;
+        this.agentRegistry = agentRegistry;
         this.chatModel = chatModel;
         this.agentAnalysisRepository = agentAnalysisRepository;
     }
@@ -50,7 +50,7 @@ public class AiAgentOrchestratorService {
 
         // AiServices ile Langchain4j native Tool Calling kullanımı
         // Yönlendirme planı Supervisor için de bağlayıcı: plan dışı tool çağrısı koşturulmaz
-        AgentTools tools = new AgentTools(request, agents, context,
+        AgentTools tools = new AgentTools(agentRegistry, context,
                 com.testgen.agent.AgentRouting.resolve(request, effectiveMode(request)));
         SupervisorAgent supervisor = AiServices.builder(SupervisorAgent.class)
                 .chatLanguageModel(chatModel)
@@ -85,14 +85,16 @@ public class AiAgentOrchestratorService {
             supervisorReport = runSequentialFallback(request, context);
         }
 
-        // Sessiz devre dışı kalma koruması: tool calling'i tam desteklemeyen modeller
-        // (örn. llama3.1) istisna fırlatmadan, tool ÇAĞIRMAK yerine tool çağrısını
-        // ANLATAN metin döndürebiliyor. Bu durumda hiçbir ajan koşmaz ama sistem
-        // başarılı görünür — çok-ajanlı analiz sessizce kaybolur. Ajan tanımlı olduğu
-        // hâlde hiçbiri çağrılmadıysa deterministik sıralı koşuma düşülür.
-        if (!agents.isEmpty() && context.results().isEmpty()) {
-            log.warn("Supervisor hiçbir ajanı çağırmadı (tool call yerine düz metin döndü) — "
-                    + "deterministik sıralı fallback devrede.");
+        // Sessiz veya eksik tool-calling koruması: model hiç tool çağırmayabilir ya da
+        // zorunlu rollerin yalnızca bir bölümünü çağırıp düz metinle tamamlayabilir.
+        // Her iki durumda da eksik zorunlu roller deterministik sırayla tamamlanır;
+        // daha önce çalışan roller fallback içinde tekrar koşturulmaz.
+        List<AiAgentRole> missingMandatoryRoles = com.testgen.agent.AgentRouting.mandatory(request).stream()
+                .filter(role -> !context.hasResult(role))
+                .toList();
+        if (!missingMandatoryRoles.isEmpty()) {
+            log.warn("Supervisor zorunlu ajan planını tamamlamadı (eksik: {}) — "
+                    + "deterministik sıralı fallback devrede.", missingMandatoryRoles);
             supervisorReport = runSequentialFallback(request, context);
         }
 
@@ -103,14 +105,17 @@ public class AiAgentOrchestratorService {
                  "--------------------------------------------------",
                  supervisorReport);
 
-        String finalContext = existingContext.isBlank() 
-                ? SECTION_TITLE + "\n\n" + supervisorReport
-                : existingContext + "\n\n" + SECTION_TITLE + "\n\n" + supervisorReport;
-
+        // Supervisor özeti serbest LLM sentezidir; tool çıktılarında bulunmayan bilgi
+        // ekleyebilir. Üretim bağlamına yalnız gerçekten çalışmış agent çıktıları girer.
+        // Supervisor raporu operasyon logunda kalır, test üretimine kanıt olarak verilmez.
         String agentSection = context.toContextSection();
-        if (!agentSection.isBlank()) {
-            finalContext += "\n\n### DETAYLI AJAN ÇIKTILARI\n" + agentSection;
+        if (agentSection.isBlank()) {
+            throw new TestGenerationException("Agent analizi tamamlandı ancak doğrulanabilir agent çıktısı oluşmadı.");
         }
+        String analysisSection = SECTION_TITLE + "\n\n### GERÇEKLEŞEN AJAN ÇIKTILARI\n" + agentSection;
+        String finalContext = existingContext.isBlank()
+                ? analysisSection
+                : existingContext + "\n\n" + analysisSection;
 
         persistAnalyses(request, context);
 
@@ -139,24 +144,33 @@ public class AiAgentOrchestratorService {
 
     /**
      * Supervisor devre dışı kaldığında zorunlu ajanları yönlendirme planındaki
-     * sırayla koşan deterministik fallback. Tek bir ajanın hatası zinciri durdurmaz.
+     * sırayla koşan deterministik fallback. Zorunlu rol hatası zinciri durdurur;
+     * opsiyonel rol hatası raporlanır ve zincir devam eder.
      */
     private String runSequentialFallback(TestGenerationRequest request, AiAgentContext context) {
         // Yönlendirme TEK kaynaktan gelir: Supervisor'a verilen planla birebir aynı liste.
         // Önceden burada sabit bir liste vardı ve plan pratikte bağlayıcı değildi.
+        List<AiAgentRole> mandatory = com.testgen.agent.AgentRouting.mandatory(request);
         List<AiAgentRole> order = com.testgen.agent.AgentRouting.resolve(request, effectiveMode(request));
 
         StringBuilder report = new StringBuilder("(Fallback: sıralı ajan koşumu — Supervisor devre dışı)\n");
         for (AiAgentRole role : order) {
-            agents.stream().filter(a -> a.role() == role).findFirst().ifPresent(agent -> {
-                try {
-                    AiAgentResult result = agent.analyze(context);
-                    context.addResult(result);
-                    report.append("\n### ").append(result.title()).append("\n").append(result.output()).append("\n");
-                } catch (Exception ex) {
-                    log.warn("Fallback ajan hatası ({}): {} — zincir devam ediyor.", role, ex.getMessage());
+            if (context.hasResult(role)) {
+                log.debug("Fallback → {} ajanı Supervisor tarafından zaten çalıştırılmış, tekrar çağrılmıyor.", role);
+                continue;
+            }
+            try {
+                AiAgentResult result = agentRegistry.required(role).analyze(context);
+                context.addResult(result);
+                report.append("\n### ").append(result.title()).append("\n").append(result.output()).append("\n");
+            } catch (Exception ex) {
+                if (mandatory.contains(role)) {
+                    throw new TestGenerationException("Zorunlu agent başarısız: " + role
+                            + " — " + ex.getMessage(), ex);
                 }
-            });
+                log.warn("Opsiyonel fallback agent hatası ({}): {} — zincir devam ediyor.",
+                        role, ex.getMessage());
+            }
         }
         return report.toString();
     }

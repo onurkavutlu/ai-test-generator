@@ -24,10 +24,9 @@ public interface LlmCallLogRepository extends JpaRepository<LlmCallLog, String> 
 
     long countBySuccess(boolean success);
 
-    /**
-     * Belirli bir zaman penceresindeki çağrılar.
-     * Ajan ölçüm koşumu, LLM maliyetini üretime bu pencereyle atfeder — çağrı kayıtlarında
-     * requestId alanı yok ve koşumlar sıralı yürütüldüğü için pencere kesin sonuç verir.
-     */
+    /** Belirli bir üretim isteğine korele edilmiş tüm LLM çağrıları. */
+    List<LlmCallLog> findByRequestIdOrderByCalledAtAsc(String requestId);
+
+    /** Zaman aralığı sorgusu yalnız genel raporlama/operasyon analizi içindir. */
     List<LlmCallLog> findByCalledAtBetween(LocalDateTime start, LocalDateTime end);
 }
