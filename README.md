@@ -10,7 +10,7 @@ Swagger · Postman · HAR · GraphQL · WSDL → Karate DSL · REST Assured · S
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.4-6DB33F)](#technology-stack)
 [![Coverage gate](https://img.shields.io/badge/coverage%20gate-line%20%E2%89%A5%2072%25%20·%20branch%20%E2%89%A5%2058%25-blue)](#quality-gates)
 [![Tests](https://img.shields.io/badge/tests-640-brightgreen)](#quality-gates)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 [Türkçe README](README_TR.md)
 
@@ -78,7 +78,7 @@ Java 17+ is required, Maven is not.
 
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
