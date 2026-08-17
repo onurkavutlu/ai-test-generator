@@ -545,14 +545,16 @@ public class ObservationService {
 
             java.util.Map<String, String> headers = new java.util.LinkedHashMap<>();
             resp.headers().map().forEach((k, v) -> {
-                if (!k.startsWith(":")) headers.put(k, String.join(", ", v));
+                if (!k.startsWith(":")) {
+                    headers.put(k, sensitiveResponseHeader(k) ? "[REDACTED]" : String.join(", ", v));
+                }
             });
 
-            String headerLines = resp.headers().map().entrySet().stream()
-                    .filter(e -> !e.getKey().startsWith(":"))
-                    .flatMap(e -> e.getValue().stream().map(v -> e.getKey() + ": " + v))
+            String headerLines = headers.entrySet().stream()
+                    .map(e -> e.getKey() + ": " + e.getValue())
                     .collect(java.util.stream.Collectors.joining("\n"));
-            String cookieLines = String.join("\n", resp.headers().allValues("set-cookie"));
+            String cookieLines = resp.headers().allValues("set-cookie").isEmpty()
+                    ? "" : "[REDACTED: Set-Cookie present]";
             String responseBody = resp.body();
             long responseSize = responseBody == null ? 0
                     : responseBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
@@ -570,6 +572,15 @@ public class ObservationService {
 
     private static final java.util.Set<String> RESTRICTED_HEADERS = java.util.Set.of(
             "connection", "content-length", "expect", "host", "upgrade");
+
+    /** Bu başlıkların değeri oturum veya erişim sırrı olabilir; DB'ye ve LLM bağlamına yazılmaz. */
+    private static final java.util.Set<String> SENSITIVE_RESPONSE_HEADERS = java.util.Set.of(
+            "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "api-key",
+            "x-auth-token", "x-access-token", "x-csrf-token");
+
+    private static boolean sensitiveResponseHeader(String headerName) {
+        return SENSITIVE_RESPONSE_HEADERS.contains(headerName.toLowerCase(Locale.ROOT));
+    }
 
     // ─────────────────────────────────────────────────────────
     // BACKEND: Swagger'dan güvenli endpoint probları

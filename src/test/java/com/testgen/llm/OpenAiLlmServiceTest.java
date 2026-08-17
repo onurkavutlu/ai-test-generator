@@ -94,4 +94,13 @@ class OpenAiLlmServiceTest {
         assertThrows(LlmException.class,
                 () -> service.generateFromSoap("<soap:Envelope/>", ""));
     }
+
+    @Test
+    @DisplayName("OpenAI seçildiğinde anahtar secret olarak zorunludur")
+    void blankApiKeyFailsFast() {
+        var ex = assertThrows(IllegalStateException.class,
+                () -> new OpenAiLlmService(" ", "gpt-4", "https://api.openai.com/v1", 0.2, 128));
+
+        assertTrue(ex.getMessage().contains("OPENAI_API_KEY"));
+    }
 }

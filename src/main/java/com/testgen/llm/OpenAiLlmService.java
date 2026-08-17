@@ -42,6 +42,11 @@ public class OpenAiLlmService implements LlmService {
             @Value("${llm.openai.temperature}") double temperature,
             @Value("${llm.openai.max-tokens}") int maxTokens) {
 
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "LLM_PROVIDER=openai için OPENAI_API_KEY secret'ı yapılandırılmalıdır.");
+        }
+
         this.chatModel = OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(model)

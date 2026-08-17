@@ -44,7 +44,9 @@ spring:
 llm:
   provider: ${LLM_PROVIDER:ollama}
   openai:
-    api-key: ${OPENAI_API_KEY:not-needed}
+    # Anahtar yalnız çalışma ortamından/secrets manager'dan gelir; repoda veya
+    # varsayılan konfigürasyonda sahte dahi olsa bir anahtar tutulmaz.
+    api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-4-turbo-preview}
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
     temperature: 0.2

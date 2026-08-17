@@ -81,8 +81,8 @@ class ObservationPersistenceTest {
         assertTrue(req.getObservedBody().contains("tamam"), req.getObservedBody());
         assertTrue(req.getObservedResponseHeaders().contains("x-trace-id: trace-123"),
                 req.getObservedResponseHeaders());
-        assertTrue(req.getObservedResponseCookies().contains("SESSION=test-session"),
-                req.getObservedResponseCookies());
+        assertEquals("[REDACTED: Set-Cookie present]", req.getObservedResponseCookies(),
+                "Oturum cookie değeri kanıt kaydına yazılmamalı");
         assertTrue(req.getObservedResponseSizeBytes() > 0);
         assertNotNull(req.getObservedHttpVersion());
         assertTrue(req.getObservedRequestLine().startsWith("POST "), req.getObservedRequestLine());

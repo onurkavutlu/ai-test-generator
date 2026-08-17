@@ -52,6 +52,12 @@ public class ObservationServiceTest {
             if (!ex.getRequestMethod().equals("GET")) mutationHits.incrementAndGet();
             respond(ex, 200, "application/json", "{\"id\":7,\"name\":\"Pamuk\"}");
         });
+        server.createContext("/api/credentials", ex -> {
+            ex.getResponseHeaders().add("Authorization", "Bearer response-secret");
+            ex.getResponseHeaders().add("X-Api-Key", "response-api-key");
+            ex.getResponseHeaders().add("Set-Cookie", "session=response-cookie; HttpOnly");
+            respond(ex, 200, "application/json", "{\"ok\":true}");
+        });
         server.createContext("/openapi.json", ex -> respond(ex, 200, "application/json", """
                 {"openapi":"3.0.0","info":{"title":"t","version":"1"},
                  "servers":[{"url":"%s"}],
@@ -196,6 +202,23 @@ public class ObservationServiceTest {
         assertTrue(ctx.contains("## OBSERVED RESPONSE"));
         assertTrue(ctx.contains("Gözlenen Status: 200"));
         assertTrue(ctx.contains("Pamuk"));
+    }
+
+    @Test
+    public void sensitiveResponseHeadersAndCookiesAreRedactedBeforePersistence() {
+        TestGenerationRequest req = TestGenerationRequest.builder()
+                .testType(TestType.BACKEND_API).framework(TestFramework.KARATE)
+                .rawPayload("curl -X GET " + baseUrl + "/api/credentials")
+                .payloadType("CURL").build();
+
+        service.enrichWithObservations(req);
+
+        String headers = req.getObservedResponseHeaders().toLowerCase(java.util.Locale.ROOT);
+        assertTrue(headers.contains("authorization: [redacted]"));
+        assertTrue(headers.contains("x-api-key: [redacted]"));
+        assertFalse(headers.contains("response-secret"));
+        assertEquals("[REDACTED: Set-Cookie present]", req.getObservedResponseCookies());
+        assertFalse(req.getObservedResponseCookies().contains("response-cookie"));
     }
 
     /**
