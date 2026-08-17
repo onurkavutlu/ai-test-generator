@@ -18,6 +18,13 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    # Önceki Hibernate yönetimli veritabanlarında schema history yoktur. 0'a
+    # baseline alındıktan sonra V1 legacy backfill'i çalışır; boş veritabanında
+    # ise V1 güvenle no-op olur ve mevcut bootstrap davranışı korunur.
+    baseline-on-migrate: true
+    baseline-version: "0"
+    baseline-description: Legacy Hibernate schema
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
