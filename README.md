@@ -2,16 +2,17 @@
 
 # AI Test Generator
 
-**API sözleşmenizden ISTQB standartlarında, çalıştırılabilir test paketi.**
+**From your API contract to an executable, ISTQB-grade test suite.**
 
 Swagger · Postman · HAR · GraphQL · WSDL → Karate DSL · REST Assured · Selenium
 
-[![Java](https://img.shields.io/badge/Java-17-orange)](#teknoloji-yığını)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.4-6DB33F)](#teknoloji-yığını)
-[![Kapsam kapısı](https://img.shields.io/badge/kapsam%20kapısı-satır%20%E2%89%A5%2072%25%20·%20dal%20%E2%89%A5%2058%25-blue)](#kalite-kapıları)
-[![Testler](https://img.shields.io/badge/testler-539-brightgreen)](#kalite-kapıları)
+[![Java](https://img.shields.io/badge/Java-17-orange)](#technology-stack)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.4-6DB33F)](#technology-stack)
+[![Coverage gate](https://img.shields.io/badge/coverage%20gate-line%20%E2%89%A5%2072%25%20·%20branch%20%E2%89%A5%2058%25-blue)](#quality-gates)
+[![Tests](https://img.shields.io/badge/tests-640-brightgreen)](#quality-gates)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-[English README](README_EN.md)
+[Türkçe README](README_TR.md)
 
 </div>
 
@@ -19,64 +20,69 @@ Swagger · Postman · HAR · GraphQL · WSDL → Karate DSL · REST Assured · S
 
 ---
 
-## Hangi problemi çözer
+## What problem does it solve
 
-**Test tasarımı kişiye bağlıdır.** Aynı endpoint'i iki mühendis farklı kapsamda test eder; negatif ve
-sınır senaryolar çoğu zaman ilk elenenlerdir. Platform senaryoları ISTQB test tasarım tekniklerine
-göre türetir ve her senaryoyu `[KATEGORİ][ÖNCELİK][TEKNİK]` etiketiyle işaretler — hangi senaryonun
-hangi gerekçeyle var olduğu izlenebilir.
+**Test design depends on who writes it.** Two engineers cover the same endpoint differently, and
+negative or boundary scenarios are usually the first to be dropped. The platform derives scenarios
+from ISTQB test design techniques and tags each one `[CATEGORY][PRIORITY][TECHNIQUE]`, so the
+engineering rationale behind every scenario stays traceable.
 
-**Üretilen test, koşmadan güvenilmez.** Üretim çıktısı veritabanına yazılmadan önce makineyle
-doğrulanır: Karate feature'ı ayrıştırılır, Java kodu derlenir. Geçemeyen içerik `INVALID` olarak
-gerekçesiyle işaretlenir; hata koşum sırasında değil üretim sırasında görünür olur.
+**A generated test is worthless until it runs.** Output is machine-validated before it reaches the
+database: Karate features are parsed, Java code is compiled. Content that fails is stored as
+`INVALID` with its reason — the error surfaces at generation time instead of during a run.
 
-**Testler sözleşme değişince çürür.** Başarısız test, hata çıktısıyla birlikte dil modeline geri
-verilerek onarılabilir; onarılmış sürüm özgün case'in yerini alır.
+**Tests rot when the contract changes.** A failing test can be sent back to the model together with
+its stack trace and repaired; the repaired version supersedes the original case.
 
-**Üretilmiş içerik doğrulanabilir olmalıdır.** Hedefe erişilebiliyorsa testler tahmine değil ölçülen
-yanıta dayanır. Erişilemiyorsa sistem varsayılan bir status veya adres üretmez — üretimi durdurur ve
-nedenini bildirir. Bu davranış `NoFabricatedContentTest` ile derlemeye bağlıdır.
+**Generated content must be verifiable.** When the target is reachable, tests are based on the
+measured response rather than a guess. When it is not, the system does not invent a default status
+or address — it stops generation and reports why. This behaviour is enforced by
+`NoFabricatedContentTest`.
 
 ---
 
-## Hızlı başlangıç
+## Quick start
 
-Önkoşul: Docker Desktop ve Git. Ollama kurulu değilse `setup.sh` kurar.
+Prerequisites: Docker Desktop and Git. When Ollama is used, its service/model must be
+provisioned through the approved organisational process; bootstrap never installs software or models.
 
 ```bash
 git clone https://github.com/onurkavutlu/ai-test-generator.git
 cd ai-test-generator && cp .env.example .env
-chmod +x setup.sh && ./setup.sh
+make bootstrap
 ```
 
-Uygulama, PostgreSQL, MailHog, Allure, Selenium Grid, Prometheus, Grafana ve pgAdmin ayağa kalkar.
-Dashboard: **http://localhost:8080**
+The application, PostgreSQL, MailHog, Allure, Selenium Grid, Prometheus, Grafana and pgAdmin start
+together. Dashboard: **http://localhost:8080**
 
-Üretimi komut satırından tetiklemek için:
+To trigger generation from the command line:
 
 ```bash
 ./trigger-generation.sh --swagger <openapi-url> --framework KARATE --run
 ```
 
-Betik hedef sözleşmeye erişilebildiğini doğrulamadan üretimi başlatmaz; erişilemiyorsa nedenini
-bildirip durur.
+The script will not start generation before verifying that the target contract is reachable; if it
+is not, it stops and reports the reason.
 
 <details>
-<summary><b>Docker kullanmadan yerel kurulum</b></summary>
+<summary><b>Local run without Docker</b></summary>
 
-Yalnızca uygulama çalışır; veri dosya tabanlı H2'de (`java.io.tmpdir` altında) tutulur.
-Java 17+ gerekir, Maven gerekmez.
+Only the application runs; data is kept in a file-based H2 database (under `java.io.tmpdir`).
+Java 17+ is required, Maven is not.
 
 ```bash
-chmod +x kurulum.sh && ./kurulum.sh     # yokla, kur, başlat
-./kurulum.sh --check                    # yalnızca ortamı yokla
+# Java 17 and local Ollama/approved LLM access must already be available.
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 </details>
 
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
+
 ---
 
-## Üretilen test neye benzer
+## What generated tests look like
 
 ```gherkin
 Feature: User Authentication API
@@ -87,7 +93,7 @@ Feature: User Authentication API
     * def validUser   = { username: 'testuser@example.com', password: 'Test@123' }
     * def invalidUser = { username: 'wrong@example.com',    password: 'WrongPass' }
 
-  Scenario: POST /auth/login - Geçerli kimlik bilgileriyle başarılı giriş
+  Scenario: POST /auth/login - successful login with valid credentials
     Given path '/auth/login'
     And request validUser
     When method POST
@@ -96,7 +102,7 @@ Feature: User Authentication API
     And match response.expiresIn == '#number'
     And match response.user.email == validUser.username
 
-  Scenario: POST /auth/login - Hatalı şifreyle 401 dönmeli
+  Scenario: POST /auth/login - wrong password must return 401
     Given path '/auth/login'
     And request invalidUser
     When method POST
@@ -104,18 +110,18 @@ Feature: User Authentication API
     And match response.error == '#notnull'
 ```
 
-Tam örnekler: [`docs/example-generated-test.feature`](docs/example-generated-test.feature) ·
+Full examples: [`docs/example-generated-test.feature`](docs/example-generated-test.feature) ·
 [`docs/example-selenium-generated.java`](docs/example-selenium-generated.java)
 
 ---
 
-## Nasıl çalışır
+## How it works
 
-### Sistem mimarisi
+### System architecture
 
 ```mermaid
 flowchart TB
-    subgraph Arayuz["Sunum"]
+    subgraph UI["Presentation"]
         DASH["Dashboard"]
         CMP["Comparer"]
         SWG["Swagger UI"]
@@ -127,31 +133,31 @@ flowchart TB
         RUN_API["/runner · /executions"]
     end
 
-    subgraph Uretim["Üretim"]
+    subgraph GENERATION["Generation"]
         OBS["ObservationService"]
         LEARN["AgentLearningService"]
         ORCH["AiAgentOrchestrator"]
-        GENS["Karate · REST Assured<br/>Selenium üreticileri"]
+        GENS["Karate · REST Assured<br/>Selenium generators"]
         GATE["TestContentGate"]
         CLS["TestCaseClassifier"]
     end
 
-    subgraph Kosum["Koşum"]
+    subgraph EXECUTION["Execution"]
         RUNNER["TestRunnerService"]
         KRUN["KarateRunner"]
-        JPROJ["Java test projesi"]
+        JPROJ["Java test project"]
         REPORT["ReportOrchestrator"]
         HEAL["FailureAnalysisService"]
     end
 
-    subgraph Altyapi["Altyapı"]
+    subgraph INFRA["Infrastructure"]
         GUARD["OutboundUrlGuard"]
         LLM["Ollama / OpenAI"]
         DB[("H2 · PostgreSQL")]
-        MAIL["E-posta"]
+        MAIL["Email"]
     end
 
-    Arayuz --> API
+    UI --> API
     GEN_API --> OBS --> LEARN --> ORCH --> GENS --> GATE --> CLS --> DB
     SUITE_API --> RUNNER
     RUN_API --> RUNNER
@@ -159,274 +165,274 @@ flowchart TB
     RUNNER --> REPORT --> MAIL
     RUNNER --> HEAL --> GENS
     ORCH & GENS & GATE & HEAL --> LLM
-    OBS & KRUN & CMP --> GUARD --> HEDEF["Hedef API / uygulama"]
+    OBS & KRUN & CMP --> GUARD --> TARGET["Target API / application"]
 ```
 
-### Üretim akışı
+### Generation flow
 
-Aşağıdaki sıra `TestGenerationService.generateTests` gövdesindeki gerçek çağrı sırasıdır.
+The sequence below is the actual call order inside `TestGenerationService.generateTests`.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor K as Kullanıcı
+    actor U as User
     participant C as Controller
     participant S as TestGenerationService
     participant O as ObservationService
     participant L as AgentLearningService
     participant A as AiAgentOrchestrator
-    participant G as Üretici
+    participant G as Generator
     participant T as TestContentGate
-    participant D as Veritabanı
+    participant D as Database
 
-    K->>C: POST /api/v1/tests/generate
+    U->>C: POST /api/v1/tests/generate
     C->>S: generateTests(requestId)
-    C-->>K: 202 · requestId
-    S->>D: durum = GENERATING
+    C-->>U: 202 · requestId
+    S->>D: status = GENERATING
 
     S->>O: enrichWithObservations()
-    O->>O: hedefe gerçek istek (OutboundUrlGuard)
-    alt Hedefe erişildi
-        O-->>S: OBSERVED — ölçülen status ve gövde
-    else Erişilemedi
-        O-->>S: OBSERVED NOTE — "status/alan uydurmayın"
+    O->>O: real request to target (OutboundUrlGuard)
+    alt Target reachable
+        O-->>S: OBSERVED — measured status and body
+    else Unreachable
+        O-->>S: OBSERVED NOTE — "do not invent status/fields"
     end
 
     S->>L: enrichWithLearnings()
-    L-->>S: geçmiş koşumlardan bilinen tuzaklar
+    L-->>S: known pitfalls from past runs
 
     opt agentsEnabled
         S->>A: enrichAdditionalContext()
-        A->>A: Supervisor, AgentRouting'in seçtiği ajanları çağırır
-        A-->>S: birleşik analiz
+        A->>A: Supervisor calls the agents selected by AgentRouting
+        A-->>S: combined analysis
     end
 
     S->>G: generate(request)
-    G-->>S: aday case'ler
+    G-->>S: candidate cases
 
-    loop her case
+    loop each case
         S->>T: apply(case)
-        T->>T: Karate parse / Java derleme
-        alt Doğrulama başarısız
-            T->>T: hatayı modele geri ver, yeniden üret ve doğrula
+        T->>T: Karate parse / Java compile
+        alt Validation failed
+            T->>T: feed the error back to the model, regenerate and revalidate
         end
-        T-->>S: VALID | INVALID (gerekçeli)
+        T-->>S: VALID | INVALID (with reason)
     end
 
-    S->>S: sınıflandır (kategori · seviye · teknik)
-    S->>D: case'leri kaydet, durum = GENERATED
+    S->>S: classify (category · level · technique)
+    S->>D: persist cases, status = GENERATED
 ```
 
-### Koşum ve onarım akışı
+### Execution and repair flow
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant TR as Tetikleyici<br/>kullanıcı · suite · plan · zamanlayıcı
+    participant TR as Trigger<br/>user · suite · plan · scheduler
     participant R as TestRunnerService
     participant KR as KarateRunner
     participant E as TestExecutionService
     participant RP as ReportOrchestrator
     participant F as FailureAnalysisService
 
-    TR->>R: koşum isteği
-    R->>E: execution aç (PLAN · SUITE · RERUN · SCHEDULER)
-    R->>R: supersede edilmiş case'leri hariç tut
+    TR->>R: run request
+    R->>E: open execution (PLAN · SUITE · RERUN · SCHEDULER)
+    R->>R: exclude superseded cases
 
-    loop her case
+    loop each case
         R->>KR: run(case)
-        KR->>KR: feature'ı izole dizine yaz, Karate ile koş
-        KR-->>R: toplam · geçen · başarısız · süre
-        R->>E: sonucu kaydet
+        KR->>KR: write feature to an isolated dir, run with Karate
+        KR-->>R: total · passed · failed · duration
+        R->>E: record result
     end
 
-    R->>E: execution kapat
+    R->>E: close execution
     R->>RP: generateAndSend()
-    RP->>RP: Allure sonuçları + HTML, Cucumber raporu
-    RP-->>TR: e-posta bildirimi
+    RP->>RP: Allure results + HTML, Cucumber report
+    RP-->>TR: email notification
 
     alt autoGenerateOnFailure = true
-        R->>F: başarısız case'leri analiz et
-        F-->>R: kod + stacktrace ile onarılmış sürüm
-        R->>KR: onarılmış case'i koş, özgününü supersede et
-    else varsayılan (false)
-        R-->>TR: onarım için POST /api/v1/tests/{id}/self-heal
+        R->>F: analyse failed cases
+        F-->>R: repaired version from code + stack trace
+        R->>KR: run repaired case, supersede the original
+    else default (false)
+        R-->>TR: start repair with POST /api/v1/tests/{id}/self-heal
     end
 ```
 
-**Self-healing varsayılan olarak otomatik değildir.** `autoGenerateOnFailure` varsayılanı `false`;
-onarım `POST /api/v1/tests/{id}/self-heal` ile başlatılır. Bir case en fazla `max-heal-attempts`
-(varsayılan 3) kez onarılır, tek turda en fazla `MAX_HEAL_BATCH` (varsayılan 10) case işlenir.
+**Self-healing is not automatic by default.** `autoGenerateOnFailure` defaults to `false`; repair is
+started with `POST /api/v1/tests/{id}/self-heal`. A case is repaired at most `max-heal-attempts`
+times (default 3), and at most `MAX_HEAL_BATCH` cases (default 10) are processed per round.
 
-### Test varlıkları
+### Test entities
 
 ```mermaid
 erDiagram
-    TestGenerationRequest ||--o{ GeneratedTestCase : üretir
-    TestSuite }o--o{ GeneratedTestCase : içerir
-    TestPlan }o--o{ TestSuite : kapsar
-    TestExecution ||--o{ TestExecutionResult : kaydeder
+    TestGenerationRequest ||--o{ GeneratedTestCase : generates
+    TestSuite }o--o{ GeneratedTestCase : contains
+    TestPlan }o--o{ TestSuite : covers
+    TestExecution ||--o{ TestExecutionResult : records
 ```
 
-Case'ler test paketlerinde, paketler test planlarında toplanır. Her koşum bir `TestExecution` kaydı
-oluşturur ve tetikleyicisi saklanır. Zamanlanmış koşum `scheduler.daily-run.cron` ifadesine göre
-çalışır (varsayılan: her gün 02:00).
+Cases are grouped into test suites and suites into test plans. Every run creates a `TestExecution`
+record together with its trigger. Scheduled runs follow the `scheduler.daily-run.cron` expression
+(default: daily at 02:00).
 
-### Ajan yönlendirme
+### Agent routing
 
-Sekiz ajan rolü tanımlıdır; bir istekte hepsi koşmaz. Koşacak ajanlar `AgentRouting` tarafından test
-tipine ve moda göre seçilir.
+Eight agent roles are defined; not all of them run for a given request. `AgentRouting` selects the
+agents based on test type and mode.
 
-| Ajan | Sorumluluk | LEAN (varsayılan) | FULL |
+| Agent | Responsibility | LEAN (default) | FULL |
 |---|---|:---:|:---:|
-| Product Manager | İş riski, kabul kriterleri | hikâye varsa | ✓ |
-| Developer | Teknik inceleme, veri ve kısıt kuralları | API testinde | ✓ |
-| Test Analyst | ISTQB test stratejisi | ✓ | ✓ |
-| Test Automation | Çalıştırılabilir koda dönüştürme | ✓ | ✓ |
-| SecOps | Güvenlik senaryosu kuralları | API testinde | ✓ |
-| Performance | SLA ve yük gereksinimleri | — | ✓ |
-| Report | Konsolidasyon, yönetici özeti | — | ✓ |
+| Product Manager | Business risk, acceptance criteria | if user story present | ✓ |
+| Developer | Technical review, data and constraint rules | for API tests | ✓ |
+| Test Analyst | ISTQB test strategy | ✓ | ✓ |
+| Test Automation | Conversion into executable code | ✓ | ✓ |
+| SecOps | Security scenario rules | for API tests | ✓ |
+| Performance | SLA and load requirements | — | ✓ |
+| Report | Consolidation, executive summary | — | ✓ |
 
-Mod `AGENT_MODE` ile belirlenir. Supervisor rolleri tool calling ile çağırır; model bunu
-desteklemiyorsa sıralı yedek akışa geçilir — bu durumda da hazır metin üretilmez, cevap alınamayan
-ajanın analizi boş kalır.
+The mode is set with `AGENT_MODE`. A Supervisor invokes the roles via tool calling; if the model does
+not support it, a sequential fallback is used — and even then no canned text is produced: an agent
+that cannot answer simply leaves its analysis empty.
 
 ---
 
-## CI/CD entegrasyonu
+## CI/CD integration
 
-`jenkins/Jenkinsfile` uçtan uca bir hat tanımlar; test üretimi hattın bir aşamasıdır:
+`jenkins/Jenkinsfile` defines an end-to-end pipeline in which test generation is one of the stages:
 
 ```
 Checkout → Secret Scan (Trivy) → Build & Unit Tests (mvn verify)
         → Dependency Scan (OWASP) → SonarQube → Docker Build
         → Container Scan → OCP Registry → Deploy to Dev
-        → Smoke Tests → Regression → AI Test Generation → AI Testlerini Koş
+        → Smoke Tests → Regression → AI Test Generation → Run AI Tests
 ```
 
-`AI Test Generation` aşaması, dağıtılmış uygulamanın kendi `/v3/api-docs` çıktısını kullanarak
-`POST /api/v1/tests/generate` çağırır; üretilen Karate ve Selenium testleri sonraki aşamada koşulur.
-Kubernetes/OpenShift bildirimleri `k8s/` altındadır.
+The `AI Test Generation` stage calls `POST /api/v1/tests/generate` using the deployed application's
+own `/v3/api-docs` output; the generated Karate and Selenium tests are executed in the following
+stage. Kubernetes/OpenShift manifests live under `k8s/`.
 
 ---
 
-## Güvenlik
+## Security
 
-Platform, kullanıcı tarafından verilen adreslere istek gönderdiği için doğası gereği SSRF yüzeyi
-taşır. Dışarıya çıkan tüm istekler `OutboundUrlGuard` üzerinden geçer:
+Because the platform sends requests to user-supplied addresses, it is inherently an SSRF surface.
+All outbound requests pass through `OutboundUrlGuard`:
 
-- Bulut metadata uçları her koşulda reddedilir.
-- DNS rebinding'e karşı, ana makine adının çözümlenen tüm adresleri denetlenir.
-- Yönlendirmeler otomatik izlenmez; her adım yeniden denetlenerek takip edilir.
-- Loopback ve özel ağlara varsayılan olarak izin verilir; iç servis testi birincil kullanım
-  senaryosudur. Çok kiracılı dağıtımlarda
-  `test-generator.security.allow-private-networks: false` ile kapatılır.
+- Cloud metadata endpoints are rejected unconditionally.
+- Against DNS rebinding, every resolved address of a hostname is checked — not only the first.
+- Redirects are not followed automatically; each hop is re-validated as it is followed.
+- Loopback and private networks are allowed by default, since testing internal services is the
+  primary use case. In multi-tenant deployments, disable with
+  `test-generator.security.allow-private-networks: false`.
 
-![SSRF reddi](docs/ekran-goruntuleri/04-runner-ssrf-reddi.png)
+![SSRF refusal](docs/ekran-goruntuleri/04-runner-ssrf-reddi.png)
 
 ---
 
-## Kalite kapıları
+## Quality gates
 
-`./mvnw verify` aşağıdaki kapıların tamamını koşar; biri karşılanmazsa derleme başarısız olur.
+`./mvnw verify` runs every gate below; the build fails if any of them is not met.
 
-| Kapı | Eşik | Son ölçüm |
+| Gate | Threshold | Last measurement |
 |---|---|---|
-| Testler | 0 hata | 539 test — 527 koştu ve geçti, 12 atlandı |
-| Satır kapsamı | ≥ %72 | %75.2 |
-| Dal kapsamı | ≥ %58 | %60.9 |
-| Sahte içerik denetimi | — | `NoFabricatedContentTest` |
+| Tests | 0 failures | 539 tests — 527 ran and passed, 12 skipped |
+| Line coverage | ≥ 72% | 75.2% |
+| Branch coverage | ≥ 58% | 60.9% |
+| Fabricated-content check | — | `NoFabricatedContentTest` |
 
-Atlanan senaryolar, hedef API'ye erişilemeyen ortamlarda kendini atlayan uçtan uca testlerdir; ağ
-erişimi bulunan ortamlarda koşarlar. Güncel ölçüm: `./mvnw verify` sonrası
+The skipped scenarios are end-to-end tests that skip themselves where the target API is unreachable;
+they run in environments with network access. For a current measurement, run `./mvnw verify` and open
 `target/site/jacoco/index.html`.
 
 ---
 
-## Teknoloji yığını
+## Technology stack
 
-| Katman | Teknoloji | Sürüm |
+| Layer | Technology | Version |
 |---|---|---|
-| Çalışma zamanı | Java · Spring Boot | 17 · 3.5.4 |
-| LLM altyapısı | LangChain4j | 0.34.0 |
-| Model sağlayıcı | Ollama (`llama3.1`) · OpenAI | — |
-| API test üretimi | Karate DSL · REST Assured | 1.5.2 · 5.4.0 |
-| Web test üretimi | Selenium WebDriver | 4.18.1 |
-| Senaryo ve raporlama | Cucumber · Allure | 7.15.0 · 2.24.0 |
-| Veri | H2 · PostgreSQL · Spring Data JPA | — |
-| Kalite | JUnit 5 · Mockito · JaCoCo | 0.8.11 |
-| İzleme | Micrometer · Prometheus · Grafana | — |
-| Dağıtım | Docker · Kubernetes / OpenShift · Jenkins | — |
+| Runtime | Java · Spring Boot | 17 · 3.5.4 |
+| LLM infrastructure | LangChain4j | 0.34.0 |
+| Model providers | Ollama (`llama3.1`) · OpenAI | — |
+| API test generation | Karate DSL · REST Assured | 1.5.2 · 5.4.0 |
+| Web test generation | Selenium WebDriver | 4.18.1 |
+| Scenarios and reporting | Cucumber · Allure | 7.15.0 · 2.24.0 |
+| Data | H2 · PostgreSQL · Spring Data JPA | — |
+| Quality | JUnit 5 · Mockito · JaCoCo | 0.8.11 |
+| Observability | Micrometer · Prometheus · Grafana | — |
+| Deployment | Docker · Kubernetes / OpenShift · Jenkins | — |
 
-LangChain4j 0.34.0'a sabitlenmiştir: Ollama üzerinden tool calling bu sürümde beklendiği gibi
-çalışmakta olup Supervisor orkestrasyonu bu yeteneğe bağlıdır.
+LangChain4j is pinned to 0.34.0: tool calling over Ollama behaves as expected in this version, and
+Supervisor orchestration depends on that capability.
 
 <details>
-<summary><b>Proje kırılımı</b></summary>
+<summary><b>Project breakdown</b></summary>
 
 ```
 src/main/java/com/testgen/
-├── agent/        16  Ajan rolleri, Supervisor, AgentRouting, ajan araçları
-├── comparer/      9  Endpoint Comparer — JSON diff, yanıt farkı ajanı
-├── config/        5  OutboundUrlGuard, LLM yapılandırması, Swagger, hata yönetimi
-├── controller/   14  REST uçları
-├── generator/    11  Üreticiler, TestContentGate, doğrulayıcı, sınıflandırıcı
-├── llm/           7  Ollama ve OpenAI servisleri, çağrı geçmişi, prompt şablonları
-├── metrics/       1  Micrometer metrikleri
-├── model/        26  Alan modeli ve enum'lar
-├── notification/  2  E-posta bildirimi
-├── parser/        6  Swagger · Postman · HAR · GraphQL · SOAP ayrıştırıcıları
-├── report/        6  Cucumber ve Allure rapor üretimi
-├── repository/   12  JPA repository'leri
-├── runner/        9  Derleme, koşum, iddia derleyici, direkt istek servisi
-├── scheduler/     3  Zamanlanmış koşum ve hata analizi
-└── service/      11  Orkestrasyon, üretim, gözlem, plan ve paket servisleri
+├── agent/        16  Agent roles, Supervisor, AgentRouting, agent tools
+├── comparer/      9  Endpoint Comparer — JSON diff, response-diff agent
+├── config/        5  OutboundUrlGuard, LLM configuration, Swagger, error handling
+├── controller/   14  REST endpoints
+├── generator/    11  Generators, TestContentGate, validator, classifier
+├── llm/           7  Ollama and OpenAI services, call history, prompt templates
+├── metrics/       1  Micrometer metrics
+├── model/        26  Domain model and enums
+├── notification/  2  Email notification
+├── parser/        6  Swagger · Postman · HAR · GraphQL · SOAP parsers
+├── report/        6  Cucumber and Allure report generation
+├── repository/   12  JPA repositories
+├── runner/        9  Build, run, assertion compiler, direct request service
+├── scheduler/     3  Scheduled runs and failure analysis
+└── service/      11  Orchestration, generation, observation, plan and suite services
 ```
 </details>
 
 <details>
-<summary><b>Yapılandırma ve API uçları</b></summary>
+<summary><b>Configuration and API endpoints</b></summary>
 
-| Değişken | Varsayılan | Açıklama |
+| Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `ollama` | `ollama` veya `openai` |
-| `OLLAMA_MODEL` | `llama3.1` | Tool calling destekleyen model önerilir |
-| `OPENAI_API_KEY` | — | `LLM_PROVIDER=openai` için zorunlu |
-| `AGENT_MODE` | `LEAN` | Ajan yönlendirme modu (`LEAN` · `FULL`) |
-| `MAX_HEAL_BATCH` | `10` | Tek onarım turunda işlenecek azami case sayısı |
-| `EMAIL_RECIPIENTS` | — | Koşum sonrası bildirim alıcıları |
+| `LLM_PROVIDER` | `ollama` | `ollama` or `openai` |
+| `OLLAMA_MODEL` | `llama3.1` | A model with tool calling support is recommended |
+| `OPENAI_API_KEY` | — | Required when `LLM_PROVIDER=openai` |
+| `AGENT_MODE` | `LEAN` | Agent routing mode (`LEAN` · `FULL`) |
+| `MAX_HEAL_BATCH` | `10` | Maximum cases processed in one repair round |
+| `EMAIL_RECIPIENTS` | — | Notification recipients after a run |
 
-Tam API referansı Swagger UI üzerindedir: `http://localhost:8080/swagger-ui/index.html`
+The full API reference is served by Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
-| Uç | HTTP | Açıklama |
+| Endpoint | HTTP | Description |
 |---|---|---|
-| `/api/v1/tests/generate` | POST | Üretim başlatır (asenkron) |
+| `/api/v1/tests/generate` | POST | Starts generation (asynchronous) |
 | `/api/v1/tests/{id}` | GET | `PENDING` · `GENERATING` · `GENERATED` · `FAILED` |
-| `/api/v1/tests/{id}/cases` | GET · POST | Case listesi; POST ile elle yazılmış case eklenir |
-| `/api/v1/tests/{id}/run-all` | POST | Derler ve koşar |
-| `/api/v1/tests/{id}/self-heal` | POST | Onarım turu başlatır |
-| `/api/v1/tests/{id}/llm-report` | GET | Ajan analizleri |
-| `/api/v1/suites` · `/api/v1/plans` | GET · POST | Paketler ve planlar |
-| `/api/v1/executions` | GET | Koşum geçmişi |
-| `/api/v1/runner/execute` | POST | Tek isteği canlı koşar |
-| `/api/v1/comparison/run` | POST | İki ortamı karşılaştırır |
-| `/api/v1/llm/summary` | GET | LLM çağrı istatistikleri |
+| `/api/v1/tests/{id}/cases` | GET · POST | Case list; POST adds a hand-written case |
+| `/api/v1/tests/{id}/run-all` | POST | Builds and runs |
+| `/api/v1/tests/{id}/self-heal` | POST | Starts a repair round |
+| `/api/v1/tests/{id}/llm-report` | GET | Agent analyses |
+| `/api/v1/suites` · `/api/v1/plans` | GET · POST | Suites and plans |
+| `/api/v1/executions` | GET | Run history |
+| `/api/v1/runner/execute` | POST | Runs a single request live |
+| `/api/v1/comparison/run` | POST | Compares two environments |
+| `/api/v1/llm/summary` | GET | LLM call statistics |
 
-Arayüzler: `:8080` dashboard · `:8080/comparer` comparer · `:8025` MailHog · `:8888` Allure ·
+Interfaces: `:8080` dashboard · `:8080/comparer` comparer · `:8025` MailHog · `:8888` Allure ·
 `:4444` Selenium Grid · `:9090` Prometheus · `:3000` Grafana · `:5050` pgAdmin
 </details>
 
 ---
 
-## Belgeler
+## Documentation
 
-- [Üretilmiş Karate örneği](docs/example-generated-test.feature)
-- [Üretilmiş Selenium örneği](docs/example-selenium-generated.java)
-- [IntelliJ'de Karate testi koşma](docs/intellij-karate-run.md)
-- Ekran görüntüleri: [`docs/ekran-goruntuleri/`](docs/ekran-goruntuleri/)
+- [Generated Karate example](docs/example-generated-test.feature)
+- [Generated Selenium example](docs/example-selenium-generated.java)
+- [Running Karate tests in IntelliJ](docs/intellij-karate-run.md)
+- Screenshots: [`docs/ekran-goruntuleri/`](docs/ekran-goruntuleri/)
 
-## Katkı
+## Contributing
 
-Commit mesajları [Conventional Commits](https://www.conventionalcommits.org/) biçimindedir. Davranış
-değişiklikleri test ile birlikte gönderilir; kapsam kapısı karşılanmadığında derleme başarısız olur.
-Ölçülemeyen bir değeri üreten katkılar kabul edilmez.
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). Behavioural
+changes ship with tests; the build fails when the coverage gate is not met. Contributions that
+produce values which cannot be measured are not accepted.

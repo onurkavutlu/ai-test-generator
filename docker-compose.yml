@@ -32,8 +32,8 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
       OLLAMA_TIMEOUT_SECONDS: "900"
-      # ── OpenAI (kullanılmıyor ama boş geçmemeli) ──
-      OPENAI_API_KEY: not-needed
+      # ── OpenAI (yalnız LLM_PROVIDER=openai ise .env/secret store'dan gelir) ──
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # ── Database ──
       DB_URL: jdbc:postgresql://postgres:5432/testgen
       DB_USER: testgen
