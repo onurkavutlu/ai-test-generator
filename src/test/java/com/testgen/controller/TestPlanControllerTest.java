@@ -2,9 +2,12 @@ package com.testgen.controller;
 
 import com.testgen.model.GeneratedTestCase;
 import com.testgen.model.TestFramework;
+import com.testgen.model.TestGenerationRequest;
 import com.testgen.model.TestPlan;
 import com.testgen.model.TestRunStatus;
 import com.testgen.model.TestSuite;
+import com.testgen.model.TestType;
+import com.testgen.model.ValidationStatus;
 import com.testgen.runner.TestRunnerService;
 import com.testgen.service.TestPlanService;
 import org.junit.jupiter.api.DisplayName;
@@ -114,6 +117,26 @@ class TestPlanControllerTest {
                 .andExpect(jsonPath("$.suites[0].caseCount").value(2))
                 .andExpect(jsonPath("$.cases[0].id").value("c-1"))
                 .andExpect(jsonPath("$.cases[0].testName").value("GetPet"));
+    }
+
+    @Test
+    @DisplayName("Plan detayı case'in kanıt türü ve doğrulama meta verisini taşır")
+    void detailCarriesEvidenceMetadata() throws Exception {
+        TestGenerationRequest request = TestGenerationRequest.builder().id("req-plan-1")
+                .testType(TestType.FRONTEND_WEB).framework(TestFramework.SELENIUM)
+                .additionalContext("## OBSERVED USER FLOW\n1. tıkla: Ürünler").build();
+        GeneratedTestCase flowCase = GeneratedTestCase.builder().id("c-flow").testName("ObservedUserFlowTest")
+                .framework(TestFramework.SELENIUM).request(request).deterministic(true)
+                .validationStatus(ValidationStatus.VALID).build();
+        when(planService.get("p-1")).thenReturn(plan("p-1", "Frontend Planı"));
+        when(planService.resolveCases("p-1")).thenReturn(List.of(flowCase));
+
+        mockMvc.perform(get("/api/v1/plans/p-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cases[0].requestId").value("req-plan-1"))
+                .andExpect(jsonPath("$.cases[0].evidenceType").value("OBSERVED_USER_FLOW"))
+                .andExpect(jsonPath("$.cases[0].deterministic").value(true))
+                .andExpect(jsonPath("$.cases[0].validationStatus").value("VALID"));
     }
 
     @Test

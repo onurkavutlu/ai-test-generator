@@ -58,6 +58,17 @@ test-generator:
   observation:
     # Üretim/Docker varsayılanı güvenlidir. Yalnızca kontrollü test ortamında açın.
     insecure-ssl: ${OBSERVATION_INSECURE_SSL:false}
+    rendered-dom:
+      # Headless tarayıcı, hedefin JavaScript'ini çalıştırır. Bu nedenle production'da
+      # açık bir opt-in'dir; izole Selenium Grid kullanımı tavsiye edilir. Kapalıysa
+      # mevcut ham HTML gözlemi aynen devam eder.
+      enabled: ${RENDERED_DOM_OBSERVATION_ENABLED:false}
+      timeout-seconds: ${RENDERED_DOM_OBSERVATION_TIMEOUT_SECONDS:15}
+    flow-discovery:
+      # Kullanıcı yolunu tıklayarak doğrulama production'da ayrıca açık opt-in'dir.
+      # Render edilmiş DOM gözlemi etkin olsa bile bu kapalı kalır.
+      enabled: ${FLOW_DISCOVERY_ENABLED:false}
+      max-steps: ${FLOW_DISCOVERY_MAX_STEPS:3}
   generation:
     # Bir istekte üretilecek varsayılan en fazla case sayısı.
     # 0 = sınır yok (Swagger'daki her endpoint için case üretilir).

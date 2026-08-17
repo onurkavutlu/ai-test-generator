@@ -4,6 +4,8 @@ import com.testgen.controller.WebLayerTest;
 import com.testgen.model.GeneratedTestCase;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestGenerationRequest;
+import com.testgen.orchestration.FrameworkUnavailableException;
+import com.testgen.orchestration.QaOrchestrator;
 import com.testgen.service.TestGenerationService;
 import com.testgen.service.TestSuiteService;
 import org.junit.jupiter.api.DisplayName;
@@ -56,6 +58,9 @@ class DirectRequestControllerTest {
     @MockitoBean
     private TestSuiteService testSuiteService;
 
+    @MockitoBean
+    private QaOrchestrator qaOrchestrator;
+
     private DirectRequestService.DirectRunResult okResult() {
         return new DirectRequestService.DirectRunResult(
                 200, 120L, Map.of("Content-Type", "application/json"),
@@ -65,6 +70,7 @@ class DirectRequestControllerTest {
     private void stubGeneration() {
         TestGenerationRequest saved = TestGenerationRequest.builder().build();
         saved.setId("req-1");
+        when(qaOrchestrator.execute(any())).thenReturn(null);
         when(testGenerationService.createRequest(any())).thenReturn(saved);
         when(testGenerationService.generateTests(anyString()))
                 .thenReturn(CompletableFuture.completedFuture(List.<GeneratedTestCase>of()));
@@ -155,6 +161,33 @@ class DirectRequestControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value(
                         org.hamcrest.Matchers.containsString("Connection refused")));
+
+        verify(testGenerationService, never()).createRequest(any());
+        verify(testGenerationService, never()).generateTests(anyString());
+        verify(qaOrchestrator, never()).execute(any());
+    }
+
+    /**
+     * Planlama kapısı, canlı gözlem başarıyla alınsa dahi kalıcı iş oluşturmadan önce
+     * çalışır. Böylece kullanıcı anlaşılır bir 400 görür; arka planda sonradan FAILED
+     * olacak bir istek veya gözlemsiz assertion üretimi oluşmaz.
+     */
+    @Test
+    @DisplayName("Plan doğrulaması reddedilirse 400 döner ve üretim isteği oluşturulmaz")
+    void rejectsInvalidPlanBeforeCreatingGenerationRequest() throws Exception {
+        when(directRequestService.execute(any())).thenReturn(okResult());
+        when(qaOrchestrator.execute(any())).thenThrow(
+                new FrameworkUnavailableException(TestFramework.KARATE));
+
+        mockMvc.perform(post("/api/v1/runner/generate-from-response")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"url\":\"http://localhost:9/api\",\"method\":\"GET\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value(
+                        org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.containsString("Üretim planı doğrulanamadı"),
+                                org.hamcrest.Matchers.containsString("KARATE"))));
 
         verify(testGenerationService, never()).createRequest(any());
         verify(testGenerationService, never()).generateTests(anyString());

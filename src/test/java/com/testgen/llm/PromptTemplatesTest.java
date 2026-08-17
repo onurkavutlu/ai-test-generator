@@ -209,6 +209,22 @@ class PromptTemplatesTest {
             assertTrue(prompt.contains("username"), "Gözlenen selector prompt'a girmemiş");
             assertTrue(prompt.contains("submit"));
         }
+
+        @Test
+        @DisplayName("Kullanıcının test niyeti gözlemden ayrıdır; gözlenmeyen akış uydurulmaz")
+        void userIntentIsAuthoritativeAndObservationIsEvidence() {
+            String prompt = PromptTemplates.buildSeleniumPrompt(
+                    "http://x", "Yalnız arama alanı görünür olmalı",
+                    "## OBSERVED RENDERED UI CONTRACT\n- input | selector: id=search | state: visible");
+
+            assertTrue(prompt.contains("USER-REQUESTED TEST INTENT (authoritative)"), prompt);
+            assertTrue(prompt.contains("OBSERVED PAGE CONTRACT (measured; not a suggestion)"), prompt);
+            assertTrue(prompt.contains("Do not infer a login"), prompt);
+            assertTrue(prompt.contains("OBSERVED USER FLOW"), prompt);
+            assertTrue(prompt.contains("never fill a gap"), prompt);
+            assertTrue(prompt.contains("Yalnız arama alanı görünür olmalı"), prompt);
+            assertTrue(prompt.contains("selector: id=search"), prompt);
+        }
     }
 
     @Nested

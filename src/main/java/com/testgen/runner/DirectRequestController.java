@@ -4,6 +4,12 @@ import com.testgen.config.BadRequestException;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestGenerationRequest;
 import com.testgen.model.TestType;
+import com.testgen.orchestration.AgentUnavailableException;
+import com.testgen.orchestration.FrameworkUnavailableException;
+import com.testgen.orchestration.InvalidOrchestrationPlanException;
+import com.testgen.orchestration.OrchestrationRequest;
+import com.testgen.orchestration.QaOrchestrator;
+import com.testgen.orchestration.UnsupportedOrchestrationStepException;
 import com.testgen.parser.CurlParser;
 import com.testgen.service.TestGenerationService;
 import com.testgen.service.TestSuiteService;
@@ -45,6 +51,8 @@ public class DirectRequestController {
     private final TestGenerationService testGenerationService;
     private final TestRunnerService testRunnerService;
     private final TestSuiteService testSuiteService;
+    /** Üretim başlamadan önce mevcut agent/framework kayıtlarıyla planı doğrular. */
+    private final QaOrchestrator qaOrchestrator;
 
     @Operation(summary = "Endpoint'e Anında İstek Gönder",
             description = "Verilen URL, method, header ve body ile HTTP isteğini hemen çalıştırır; "
@@ -130,6 +138,11 @@ public class DirectRequestController {
                 .payloadType(framework == TestFramework.KARATE ? "CAPTURED" : null)
                 .additionalContext(observedContext)
                 .build();
+
+        // Canlı gözlemden SONRA, kalıcı istek ve async üretimden ÖNCE planı doğrula.
+        // Böylece eksik bir agent/framework için kullanıcı 202 alıp sonradan asenkron
+        // hata görmez; aynı zamanda gözlemsiz üretim kapısı bu akışta korunur.
+        validateGenerationPlan(genRequest);
         var saved = testGenerationService.createRequest(genRequest);
 
         // 4) Async üretim; bitince suite bağlama + opsiyonel otomatik koşum
@@ -155,6 +168,15 @@ public class DirectRequestController {
                 + (suiteId != null ? " ve suite'e bağlanacak" : "")
                 + (autoRun ? ", üretim bitince otomatik koşulacak." : "."));
         return ResponseEntity.accepted().body(out);
+    }
+
+    private void validateGenerationPlan(TestGenerationRequest request) {
+        try {
+            qaOrchestrator.execute(OrchestrationRequest.from(request));
+        } catch (InvalidOrchestrationPlanException | AgentUnavailableException
+                 | FrameworkUnavailableException | UnsupportedOrchestrationStepException e) {
+            throw new BadRequestException("Üretim planı doğrulanamadı: " + e.getMessage());
+        }
     }
 
     private TestFramework parseFramework(String raw) {

@@ -35,9 +35,12 @@ Maven, WebDriver, database drivers, filesystem paths, Ollama, Qwen, OpenAI, or
 provider-specific LangChain4J clients.
 
 The existing `TestGenerationService`, `TestRunnerService`, comparison services,
-and public controllers keep their current behaviour. The new core is not yet
-wired into those production paths, which preserves backward compatibility while
-the execution boundary is completed incrementally.
+and public controllers keep their current behaviour. The first production
+integration is deliberately narrow: `POST /api/v1/runner/generate-from-response`
+captures a live response, then creates and validates the orchestration plan
+before persisting the generation request or starting async generation. A plan
+rejection is returned as an explanatory HTTP 400, while the successful 202
+response contract and observation-derived context remain unchanged.
 
 ## Agent, tool, framework, and model boundaries
 
@@ -118,6 +121,8 @@ with a persistence and execution contract rather than process-local state.
 
 The tests cover deterministic routing order, framework independence,
 mandatory/optional registry behaviour, unsupported-step rejection, duplicate
-and incomplete plans, and value-object defaults. The package is protected by a
-JaCoCo line coverage gate of 90%; measured coverage for this increment is
-96.67% line and 82.86% branch coverage.
+and incomplete plans, and value-object defaults. The runner contract tests
+also prove that a rejected plan creates no generation request, while the
+integration slice runs the real planner after observing the response and
+preserves the endpoint's accepted response fields. The package is protected by
+a JaCoCo line coverage gate of 90%.

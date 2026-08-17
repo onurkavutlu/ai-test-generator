@@ -7,6 +7,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -20,8 +21,10 @@ import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.net.ssl.SSLContext;
@@ -44,7 +47,6 @@ import javax.net.ssl.X509TrustManager;
  */
 @Slf4j
 @Service
-@lombok.RequiredArgsConstructor
 public class ObservationService {
 
     /**
@@ -74,6 +76,26 @@ public class ObservationService {
      */
     private final com.testgen.parser.CurlParser curlParser;
 
+    private final RenderedPageInspector renderedPageInspector;
+
+    /** Eski doğrudan birim-test kurulumlarını ve yalnız kaynak-HTML davranışını korur. */
+    public ObservationService(com.testgen.runner.ResponseAssertionDeriver assertionDeriver,
+                              com.testgen.config.OutboundUrlGuard urlGuard,
+                              com.testgen.parser.CurlParser curlParser) {
+        this(assertionDeriver, urlGuard, curlParser, url -> java.util.Optional.empty());
+    }
+
+    @Autowired
+    public ObservationService(com.testgen.runner.ResponseAssertionDeriver assertionDeriver,
+                              com.testgen.config.OutboundUrlGuard urlGuard,
+                              com.testgen.parser.CurlParser curlParser,
+                              RenderedPageInspector renderedPageInspector) {
+        this.assertionDeriver = assertionDeriver;
+        this.urlGuard = urlGuard;
+        this.curlParser = curlParser;
+        this.renderedPageInspector = renderedPageInspector;
+    }
+
     public static final String SECTION_TITLE = "## OBSERVED";
 
     private static final int PROBE_LIMIT = 3;
@@ -84,6 +106,14 @@ public class ObservationService {
     private static final Pattern CURL_URL = Pattern.compile("(https?://[^\\s\"']+)");
     private static final Pattern HTML_TITLE = Pattern.compile("<title>(.*?)</title>", Pattern.DOTALL);
     private static final Pattern HTML_ID = Pattern.compile("<(input|button|select|textarea|form|a)\\b[^>]*\\bid=[\"']([^\"']+)[\"']");
+    private static final Pattern HTML_INTERACTIVE_ELEMENT = Pattern.compile(
+            "<(input|button|select|textarea|form|a)\\b([^>]*)>", Pattern.CASE_INSENSITIVE);
+    private static final Pattern HTML_ATTRIBUTE = Pattern.compile(
+            "([A-Za-z_:][-A-Za-z0-9_:.]*)\\s*=\\s*([\"'])(.*?)\\2", Pattern.DOTALL);
+    private static final Pattern HTML_LABEL = Pattern.compile(
+            "<label\\b([^>]*)>(.*?)</label>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern SAFE_LOCATOR_VALUE = Pattern.compile("[A-Za-z0-9_.:-]+");
+    private static final int UI_CONTRACT_LIMIT = 25;
 
     /**
      * Yalnızca güvenilen yerel test ortamlarında kullanılacak geçici kaçış anahtarı.
@@ -149,7 +179,7 @@ public class ObservationService {
         String section;
         try {
             if (request.getTestType() == TestType.FRONTEND_WEB) {
-                section = observePage(request.getApplicationUrl());
+                section = observePage(request);
             } else if (request.getRawPayload() != null && !request.getRawPayload().isBlank()) {
                 section = observeCurl(request.getRawPayload(), request);
             } else if (request.getSwaggerUrl() != null && !request.getSwaggerUrl().isBlank()) {
@@ -180,33 +210,213 @@ public class ObservationService {
     // ─────────────────────────────────────────────────────────
     // FRONTEND: gerçek sayfa yapısı
     // ─────────────────────────────────────────────────────────
-    private String observePage(String url) {
+    private String observePage(TestGenerationRequest request) {
+        String url = request == null ? null : request.getApplicationUrl();
         if (url == null || url.isBlank()) return null;
         HttpResponse<String> resp = get(url);
+        // Kaynak HTML çekimi bir CDN/WAF/kurumsal TLS nedeniyle başarısız olabilir;
+        // render edilmiş tarayıcı gerçekten açabildiyse bu daha güçlü kanıttır. Akış
+        // keşfi de kendi izole tarayıcısında çalışır, ham HTTP sonucuna bağlı değildir.
+        var rendered = renderedPageInspector.inspect(url);
+        var flow = renderedPageInspector.inspectUserFlow(url, request.getUserStory());
         if (resp == null) {
+            if (rendered.isPresent() || flow.isPresent()) {
+                String title = rendered.map(RenderedPageInspector.RenderedPageObservation::title)
+                        .filter(value -> !value.isBlank()).orElse("(kaynak title okunamadı)");
+                StringBuilder browserOnly = new StringBuilder(SECTION_TITLE
+                        + " PAGE (izole tarayıcıda canlı gözlendi — kaynak HTTP alınamadı)\n");
+                browserOnly.append("URL: ").append(url).append("\nHTTP Status: ölçülmedi\n")
+                        .append("Gerçek <title>: ").append(title).append('\n');
+                rendered.ifPresent(observation -> appendRenderedUiContract(browserOnly, observation));
+                flow.ifPresent(value -> appendUserFlowContract(browserOnly, value));
+                browserOnly.append("KURAL: Yalnızca yukarıdaki tarayıcı kanıtında bulunan locator ve akışları kullan; "
+                        + "liste dışında selector veya etkileşim UYDURMA.");
+                return browserOnly.toString();
+            }
             return SECTION_TITLE + " PAGE\nSayfa gözlemi yapılamadı (" + url + " erişilemedi) — selector'lar için kullanıcı ipuçlarına güven, uydurma.";
         }
         String html = resp.body() == null ? "" : resp.body();
 
         Matcher t = HTML_TITLE.matcher(html);
-        String title = t.find() ? t.group(1).trim().replaceAll("\\s+", " ") : "(title yok)";
+        String sourceTitle = t.find() ? t.group(1).trim().replaceAll("\\s+", " ") : "(title yok)";
 
         List<String> elements = new ArrayList<>();
         Matcher m = HTML_ID.matcher(html);
         while (m.find() && elements.size() < 25) {
             elements.add(m.group(1) + "#" + m.group(2));
         }
+        List<ObservedUiElement> uiContract = inspectUiContract(html);
+        String title = rendered.map(RenderedPageInspector.RenderedPageObservation::title)
+                .filter(value -> !value.isBlank()).orElse(sourceTitle);
 
         StringBuilder sb = new StringBuilder(SECTION_TITLE + " PAGE (canlı çekildi — selector'lar GERÇEK)\n");
         sb.append("URL: ").append(url).append("\n");
         sb.append("HTTP Status: ").append(resp.statusCode()).append("\n");
         sb.append("Gerçek <title>: ").append(title).append("\n");
+        rendered.ifPresent(observation -> appendRenderedUiContract(sb, observation));
+        flow.ifPresent(value -> appendUserFlowContract(sb, value));
         sb.append(elements.isEmpty()
                 ? "id'li form elemanı bulunamadı — yalnızca sayfa yükleme/başlık senaryoları yaz.\n"
                 : "Gerçek elementler (tag#id): " + String.join(", ", elements) + "\n");
-        sb.append("KURAL: Yalnızca yukarıda listelenen id'leri selector olarak kullan; listede olmayan selector UYDURMA.");
+        appendUiContract(sb, uiContract);
+        sb.append("KURAL: Yalnızca yukarıdaki UI sözleşmesinde yer alan locatorları kullan; "
+                + "listede olmayan selector veya etkileşim UYDURMA.");
         return sb.toString();
     }
+
+    private static void appendUserFlowContract(StringBuilder sb,
+                                               RenderedPageInspector.UserFlowObservation flow) {
+        if (flow.steps() == null || flow.steps().isEmpty()) {
+            return;
+        }
+        sb.append("## OBSERVED USER FLOW (kullanıcının istediği güvenli akış yürütüldü)\n");
+        for (RenderedPageInspector.FlowStep step : flow.steps()) {
+            sb.append(step.number()).append(". ").append(step.action())
+                    .append(" | locator: ").append(step.locator())
+                    .append(" | sonuç: ").append(step.result()).append('\n');
+        }
+        if (flow.finalUrl() != null && !flow.finalUrl().isBlank()) {
+            sb.append("Akış sonu URL: ").append(flow.finalUrl()).append('\n');
+        }
+        if (flow.finalTitle() != null && !flow.finalTitle().isBlank()) {
+            sb.append("Akış sonu başlık: ").append(flow.finalTitle()).append('\n');
+        }
+        if (flow.visibleFacts() != null) {
+            for (String fact : flow.visibleFacts()) {
+                sb.append("- görünür kanıt: ").append(fact).append('\n');
+            }
+        }
+        sb.append("KURAL: Bu akışta görünmeyen adım, locator veya iş sonucu UYDURMA.\n");
+    }
+
+    /**
+     * Render edilmiş sözleşme, kaynak HTML sözleşmesinden önce yazılır: generator
+     * görünür olduğu kanıtlanan locator'ları önceliklendirir. İçerik/alan değerleri
+     * değil yalnızca erişilebilir ad ve kararlı locator taşınır.
+     */
+    private static void appendRenderedUiContract(StringBuilder sb,
+                                                  RenderedPageInspector.RenderedPageObservation observation) {
+        if (observation.elements() == null || observation.elements().isEmpty()) {
+            return;
+        }
+        sb.append("## OBSERVED RENDERED UI CONTRACT (izole tarayıcıda görünür DOM)\n");
+        if (observation.finalUrl() != null && !observation.finalUrl().isBlank()) {
+            sb.append("Tarayıcı URL: ").append(observation.finalUrl()).append('\n');
+        }
+        for (RenderedPageInspector.UiElement element : observation.elements()) {
+            sb.append("- ").append(element.tag())
+                    .append(" | selector: ").append(element.locatorKind())
+                    .append('=').append(element.locatorValue());
+            if (element.label() != null && !element.label().isBlank()) {
+                sb.append(" | label: ").append(compactText(element.label(), 80));
+            }
+            if (element.type() != null && !element.type().isBlank()) {
+                sb.append(" | type: ").append(compactText(element.type(), 30));
+            }
+            if (element.required()) {
+                sb.append(" | required");
+            }
+            sb.append(" | state: visible\n");
+        }
+        sb.append("KURAL: Render edilmiş sözleşmedeki locator'lar görünür olarak ölçüldü; "
+                + "etkileşim veya iş sonucu ölçülmedikçe UYDURMA.\n");
+    }
+
+    /**
+     * Sayfanın ham kaynak kodunu LLM'e taşımak yerine, test yazımı için gerekli küçük
+     * ve denetlenebilir UI sözleşmesini çıkarır. Böylece kullanıcı girdileri, gizli
+     * alan değerleri veya büyük JS bundle'ları prompt'a sızmaz; locator seçimi de
+     * CSS hiyerarşisine değil, kararlı uygulama kimliklerine dayanır.
+     */
+    private static List<ObservedUiElement> inspectUiContract(String html) {
+        Map<String, String> labelsByFor = labelsByFor(html);
+        List<ObservedUiElement> result = new ArrayList<>();
+        Matcher elements = HTML_INTERACTIVE_ELEMENT.matcher(html);
+        while (elements.find() && result.size() < UI_CONTRACT_LIMIT) {
+            String tag = elements.group(1).toLowerCase(Locale.ROOT);
+            String attributes = elements.group(2);
+            Map<String, String> attrs = parseAttributes(attributes);
+            Locator locator = preferredLocator(attrs);
+            if (locator == null) {
+                continue;
+            }
+            String label = labelsByFor.getOrDefault(attrs.get("id"), attrs.get("aria-label"));
+            String type = attrs.get("type");
+            boolean required = Pattern.compile("(?i)(?:^|\\s)required(?:\\s|=|$)")
+                    .matcher(attributes).find();
+            result.add(new ObservedUiElement(tag, locator, compactText(label, 80),
+                    compactText(type, 30), required));
+        }
+        return result;
+    }
+
+    private static Map<String, String> labelsByFor(String html) {
+        Map<String, String> labels = new LinkedHashMap<>();
+        Matcher matcher = HTML_LABEL.matcher(html);
+        while (matcher.find()) {
+            String target = parseAttributes(matcher.group(1)).get("for");
+            if (target != null && !target.isBlank()) {
+                labels.put(target, compactText(matcher.group(2).replaceAll("<[^>]+>", " "), 80));
+            }
+        }
+        return labels;
+    }
+
+    private static Map<String, String> parseAttributes(String source) {
+        Map<String, String> attributes = new LinkedHashMap<>();
+        Matcher matcher = HTML_ATTRIBUTE.matcher(source);
+        while (matcher.find()) {
+            attributes.put(matcher.group(1).toLowerCase(Locale.ROOT), matcher.group(3).trim());
+        }
+        return attributes;
+    }
+
+    /** Test otomasyonunda kararlı locator önceliği: test id, sonra DOM id, sonra name. */
+    private static Locator preferredLocator(Map<String, String> attributes) {
+        for (String kind : List.of("data-testid", "id", "name")) {
+            String value = attributes.get(kind);
+            if (value != null && SAFE_LOCATOR_VALUE.matcher(value).matches()) {
+                return new Locator(kind, value);
+            }
+        }
+        return null;
+    }
+
+    private static void appendUiContract(StringBuilder sb, List<ObservedUiElement> elements) {
+        if (elements.isEmpty()) {
+            return;
+        }
+        sb.append("## OBSERVED UI CONTRACT (kaynak HTML'den çıkarıldı — kararlı locatorlar)\n");
+        for (ObservedUiElement element : elements) {
+            sb.append("- ").append(element.tag())
+                    .append(" | selector: ").append(element.locator().kind())
+                    .append('=').append(element.locator().value());
+            if (element.label() != null && !element.label().isBlank()) {
+                sb.append(" | label: ").append(element.label());
+            }
+            if (element.type() != null && !element.type().isBlank()) {
+                sb.append(" | type: ").append(element.type());
+            }
+            if (element.required()) {
+                sb.append(" | required");
+            }
+            sb.append('\n');
+        }
+        sb.append("KURAL: Locator önceliği data-testid, id, name; CSS/XPath hiyerarşisi ve gözlenmeyen etkileşim UYDURMA.\n");
+    }
+
+    private static String compactText(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        String compact = value.replaceAll("\\s+", " ").trim();
+        return compact.length() <= maxLength ? compact : compact.substring(0, maxLength) + "…";
+    }
+
+    private record Locator(String kind, String value) { }
+
+    private record ObservedUiElement(String tag, Locator locator, String label,
+                                     String type, boolean required) { }
 
     // ─────────────────────────────────────────────────────────
     // BACKEND: cURL — kullanıcının verdiği isteğin AYNISI koşulur
