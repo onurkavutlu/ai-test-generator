@@ -36,6 +36,13 @@ test-generator:
     # yalnızca local profilde sertifika zinciri doğrulamasını kapatır.
     # Kurumsal CA truststore'a eklenince false yapılmalıdır.
     insecure-ssl: ${OBSERVATION_INSECURE_SSL:true}
+    rendered-dom:
+      # Lokal geliştirmede görünür, JavaScript sonrası DOM da gözlemlenir. Üretimde
+      # yalnızca izole bir Selenium Grid ile RENDERED_DOM_OBSERVATION_ENABLED=true açın.
+      enabled: ${RENDERED_DOM_OBSERVATION_ENABLED:true}
+    flow-discovery:
+      # Yalnızca kullanıcı tarafından istenen, yan etkisiz akış adımları doğrulanır.
+      enabled: ${FLOW_DISCOVERY_ENABLED:true}
   seeding:
     enabled: true
   selenium:

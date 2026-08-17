@@ -2,8 +2,11 @@ package com.testgen.controller;
 
 import com.testgen.model.GeneratedTestCase;
 import com.testgen.model.TestFramework;
+import com.testgen.model.TestGenerationRequest;
 import com.testgen.model.TestRunStatus;
 import com.testgen.model.TestSuite;
+import com.testgen.model.TestType;
+import com.testgen.model.ValidationStatus;
 import com.testgen.runner.TestRunnerService;
 import com.testgen.service.TestSuiteService;
 import org.junit.jupiter.api.DisplayName;
@@ -137,6 +140,25 @@ class TestSuiteControllerTest {
         mockMvc.perform(get("/api/v1/suites/s-1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.testCases[0].runStatus").value("NOT_RUN"));
+    }
+
+    @Test
+    @DisplayName("Suite detayı case'in gözlem kanıtını, requestId'sini ve doğrulama durumunu taşır")
+    void detailCarriesEvidenceMetadataWithoutRawPrompt() throws Exception {
+        TestGenerationRequest request = TestGenerationRequest.builder().id("req-12345678")
+                .testType(TestType.FRONTEND_WEB).framework(TestFramework.SELENIUM)
+                .additionalContext("## OBSERVED USER FLOW\n1. tıkla: RedBox").build();
+        GeneratedTestCase flowCase = GeneratedTestCase.builder().id("c-flow").testName("ObservedUserFlowTest")
+                .fileName("ObservedUserFlowTest.java").framework(TestFramework.SELENIUM).request(request)
+                .deterministic(true).validationStatus(ValidationStatus.VALID).build();
+        when(suiteService.get("s-1")).thenReturn(suite("s-1", "Frontend", flowCase));
+
+        mockMvc.perform(get("/api/v1/suites/s-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.testCases[0].requestId").value("req-12345678"))
+                .andExpect(jsonPath("$.testCases[0].evidenceType").value("OBSERVED_USER_FLOW"))
+                .andExpect(jsonPath("$.testCases[0].deterministic").value(true))
+                .andExpect(jsonPath("$.testCases[0].validationStatus").value("VALID"));
     }
 
     @Test

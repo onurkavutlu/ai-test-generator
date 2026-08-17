@@ -160,8 +160,28 @@ public final class PromptTemplates {
                                 Follow ISTQB test design techniques strictly.
 
                                 URL: %s
-                                User story: %s
-                                HTML hints / selectors: %s
+                                USER-REQUESTED TEST INTENT (authoritative): %s
+                                OBSERVED PAGE CONTRACT (measured; not a suggestion): %s
+
+                                Intent and evidence rules (critical):
+                                - The user-requested test intent defines WHAT to test. Do not infer a login,
+                                  purchase, search submission, error state, authorization rule, or business outcome
+                                  merely because a page contains a control.
+                                - The observed page contract defines WHAT EXISTS. Use only its observed selectors,
+                                  labels, URLs, and visibility facts; never invent a locator, text, state, test data,
+                                  expected error, or timing threshold.
+                                - If the requested intent is blank or only says "test this page", generate only
+                                  non-mutating, observation-backed smoke checks (load/title/observed visible controls).
+                                - Do not click, submit, authenticate, purchase, delete, chat, or navigate away unless
+                                  that exact action and its expected outcome are both requested by the user and
+                                  supported by the observed contract. Keep every test independently runnable.
+                                - `## OBSERVED USER FLOW` is execution evidence, not an example. For a multi-step
+                                  interaction, use its measured action order and its locator verbatim. If that block
+                                  does not prove every requested transition, OMIT that transition; never fill a gap
+                                  with a guessed menu, CSS selector, button text, URL, page title, or assertion.
+                                - `## LEARNED FRONTEND FLOWS` contains prior request evidence for the same origin.
+                                  It may help choose an already-proven locator, but it never proves a new business
+                                  outcome; the current requested flow must still be supported by observed evidence.
 
                                 Requirements:
                                 - TWO classes: [PageName]Page.java and [TestName]Test.java
@@ -187,7 +207,7 @@ public final class PromptTemplates {
                                     every call fails with "this.driver is null".
                                   * The page class must NOT create its own driver.
 
-                                - APPLICABILITY RULE (CRITICAL): The scenario lists below are TEMPLATES.
+                                - APPLICABILITY RULE (CRITICAL): The scenario lists below are TEMPLATES, not a mandate.
                                   Only generate scenarios that genuinely apply to the target.
                                   If the Context explicitly states something does not exist or must not be tested
                                   (e.g. "auth YOK", "400 senaryosu YOKTUR", "form YOK"), OMIT those scenarios entirely.

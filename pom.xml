@@ -113,6 +113,16 @@
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Şema değişiklikleri Hibernate'in best-effort update mekanizmasından
+             bağımsız, sürümlü ve denetlenebilir olarak uygulanır. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
 
         <!-- ════ API Docs / Swagger UI ════ -->
         <dependency>
@@ -434,6 +444,21 @@
                                     <element>PACKAGE</element>
                                     <includes>
                                         <include>com.testgen.agent</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <!-- Yeni orchestration çekirdeği, framework veya provider
+                                     bağımlılığı eklemeden kapalı plan sözleşmesini korur. -->
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <includes>
+                                        <include>com.testgen.orchestration</include>
                                     </includes>
                                     <limits>
                                         <limit>

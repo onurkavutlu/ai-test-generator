@@ -48,4 +48,12 @@ public class FrameworkTestGeneratorRegistry {
         TestFramework framework = Objects.requireNonNull(request.getFramework(), "request.framework");
         return generators.get(framework).generate(request);
     }
+
+    /**
+     * Framework-bağımsız planlama katmanının, somut generator sınıflarını bilmeden
+     * bir framework yeteneğini doğrulamasını sağlar.
+     */
+    public boolean supports(TestFramework framework) {
+        return framework != null && generators.containsKey(framework);
+    }
 }

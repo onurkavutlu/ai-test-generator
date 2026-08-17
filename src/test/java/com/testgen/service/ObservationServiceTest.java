@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -42,7 +44,9 @@ public class ObservationServiceTest {
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/page", ex -> respond(ex, 200, "text/html",
                 "<html><title>Gerçek Sayfa Başlığı</title><body>"
-                        + "<form id=\"login-form\"><input id=\"username\"><input id=\"password\">"
+                        + "<form id=\"login-form\"><label for=\"username\">Kullanıcı adı</label>"
+                        + "<input id=\"username\" data-testid=\"login-username\" required>"
+                        + "<input name=\"password\" type=\"password\">"
                         + "<button id=\"submit-btn\">Gir</button></form></body></html>"));
         server.createContext("/api/pets", ex -> {
             if (!ex.getRequestMethod().equals("GET")) mutationHits.incrementAndGet();
@@ -86,7 +90,98 @@ public class ObservationServiceTest {
         assertTrue(ctx.contains("Gerçek Sayfa Başlığı"));
         assertTrue(ctx.contains("input#username"));
         assertTrue(ctx.contains("button#submit-btn"));
+        assertTrue(ctx.contains("## OBSERVED UI CONTRACT"));
+        assertTrue(ctx.contains("selector: data-testid=login-username"));
+        assertTrue(ctx.contains("label: Kullanıcı adı"));
+        assertTrue(ctx.contains("selector: name=password"), ctx);
+        assertTrue(ctx.contains("type: password"));
         assertTrue(ctx.contains("UYDURMA"));
+    }
+
+    @Test
+    public void renderedDomContractIsAddedWithoutLeakingInputValues() {
+        RenderedPageInspector inspector = url -> Optional.of(new RenderedPageInspector.RenderedPageObservation(
+                "JavaScript Sonrası Başlık", url,
+                List.of(new RenderedPageInspector.UiElement("input", "id", "live-search",
+                        "Site içinde ara", "text", true))));
+        ObservationService renderedService = new ObservationService(
+                new com.testgen.runner.ResponseAssertionDeriver(new com.fasterxml.jackson.databind.ObjectMapper()),
+                testGuard(), new com.testgen.parser.CurlParser(), inspector);
+        TestGenerationRequest req = TestGenerationRequest.builder()
+                .testType(TestType.FRONTEND_WEB).framework(TestFramework.SELENIUM)
+                .applicationUrl(baseUrl + "/page").build();
+
+        String ctx = renderedService.enrichWithObservations(req);
+
+        assertTrue(ctx.contains("Gerçek <title>: JavaScript Sonrası Başlık"), ctx);
+        assertTrue(ctx.contains("## OBSERVED RENDERED UI CONTRACT"), ctx);
+        assertTrue(ctx.contains("selector: id=live-search"), ctx);
+        assertTrue(ctx.contains("label: Site içinde ara"), ctx);
+        assertTrue(ctx.contains("state: visible"), ctx);
+        assertFalse(ctx.contains("value="), "Form değerleri gözlem sözleşmesine taşınmamalı");
+    }
+
+    @Test
+    public void verifiedUserFlowIsAddedAsSeparateEvidenceSection() {
+        RenderedPageInspector inspector = new RenderedPageInspector() {
+            @Override
+            public Optional<RenderedPageObservation> inspect(String url) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<UserFlowObservation> inspectUserFlow(String url, String userStory) {
+                return Optional.of(new UserFlowObservation(url + "/redbox", "RedBox", List.of(
+                        new FlowStep(1, "tıkla: Ev İnterneti", "visible link text 'Ev İnterneti'",
+                                "URL=" + url + "; ana menü açıldı"),
+                        new FlowStep(2, "tıkla: 5G RedBox", "visible link text '5G RedBox'",
+                                "URL=" + url + "/redbox; 5G RedBox Tarifeleri")),
+                        List.of("5G RedBox Tarifeleri")));
+            }
+        };
+        ObservationService renderedService = new ObservationService(
+                new com.testgen.runner.ResponseAssertionDeriver(new com.fasterxml.jackson.databind.ObjectMapper()),
+                testGuard(), new com.testgen.parser.CurlParser(), inspector);
+        TestGenerationRequest req = TestGenerationRequest.builder()
+                .testType(TestType.FRONTEND_WEB).framework(TestFramework.SELENIUM)
+                .applicationUrl(baseUrl + "/page").userStory("Ev İnterneti > 5G RedBox").build();
+
+        String ctx = renderedService.enrichWithObservations(req);
+
+        assertTrue(ctx.contains("## OBSERVED USER FLOW"), ctx);
+        assertTrue(ctx.contains("visible link text 'Ev İnterneti'"), ctx);
+        assertTrue(ctx.contains("5G RedBox Tarifeleri"), ctx);
+        assertTrue(ctx.contains("Bu akışta görünmeyen adım"), ctx);
+    }
+
+    @Test
+    public void browserEvidenceRemainsUsableWhenRawHttpFetchFails() {
+        RenderedPageInspector inspector = new RenderedPageInspector() {
+            @Override
+            public Optional<RenderedPageObservation> inspect(String url) {
+                return Optional.of(new RenderedPageObservation("Tarayıcı Başlığı", url,
+                        List.of(new UiElement("a", "id", "menu", "Ev İnterneti", "", false))));
+            }
+
+            @Override
+            public Optional<UserFlowObservation> inspectUserFlow(String url, String userStory) {
+                return Optional.of(new UserFlowObservation(url, "Tarayıcı Başlığı", List.of(
+                        new FlowStep(1, "tıkla: Ev İnterneti", "visible link text 'Ev İnterneti'", "URL=" + url)),
+                        List.of()));
+            }
+        };
+        ObservationService renderedService = new ObservationService(
+                new com.testgen.runner.ResponseAssertionDeriver(new com.fasterxml.jackson.databind.ObjectMapper()),
+                testGuard(), new com.testgen.parser.CurlParser(), inspector);
+        TestGenerationRequest req = TestGenerationRequest.builder()
+                .testType(TestType.FRONTEND_WEB).framework(TestFramework.SELENIUM)
+                .applicationUrl("http://localhost:1/unreachable").userStory("Ev İnterneti").build();
+
+        String ctx = renderedService.enrichWithObservations(req);
+
+        assertTrue(ObservationService.isObserved(ctx), ctx);
+        assertTrue(ctx.contains("kaynak HTTP alınamadı"), ctx);
+        assertTrue(ctx.contains("## OBSERVED USER FLOW"), ctx);
     }
 
     @Test
