@@ -134,6 +134,21 @@ public class TestPlanController {
         out.put("testName", tc.getTestName());
         out.put("framework", tc.getFramework());
         out.put("runStatus", tc.getRunStatus());
+        appendEvidence(out, tc);
         return out;
+    }
+
+    /** Plan görünümüne yalnız güvenli kanıt meta verisini taşır; ham prompt taşınmaz. */
+    private static void appendEvidence(Map<String, Object> out, GeneratedTestCase testCase) {
+        var request = testCase.getRequest();
+        String context = request == null ? "" : request.getAdditionalContext();
+        String evidenceType = context != null && context.contains("## OBSERVED USER FLOW")
+                ? "OBSERVED_USER_FLOW"
+                : context != null && context.contains("## OBSERVED") ? "OBSERVED" : "NONE";
+        out.put("requestId", request == null ? null : request.getId());
+        out.put("evidenceType", evidenceType);
+        out.put("deterministic", testCase.isDeterministic());
+        out.put("validationStatus", testCase.getValidationStatus() == null
+                ? "NOT_VALIDATED" : testCase.getValidationStatus().name());
     }
 }

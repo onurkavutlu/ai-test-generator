@@ -33,6 +33,7 @@ public class TestGenerationService {
     private final AiTestDataGenerationService aiTestDataGenerationService;
     private final AgentLearningService agentLearningService;
     private final ObservationService observationService;
+    private final FrontendFlowLearningService frontendFlowLearningService;
     private final com.testgen.generator.TestContentGate testContentGate;
     private final com.testgen.generator.TestCaseClassifier testCaseClassifier;
     private final com.testgen.metrics.TestGenMetrics metrics;
@@ -78,6 +79,15 @@ public class TestGenerationService {
             // neyin gözlendiğini (ya da neden gözlenemediğini) ekranda görebilmeli.
             persistObservation(requestId, request);
             requireObservationWhenTargetGiven(request);
+            // Render edilmiş kullanıcı akışları request_id ile ayrıca saklanır ve aynı
+            // origin'e yapılacak sonraki üretimlerde doğrulanmış locator kanıtı olur.
+            // Önce yalnız önceki request'lerin kanıtını ekle, sonra bu request'in
+            // yeni gözlemini kaydet. Böylece prompt kendi akışını iki kez görmez.
+            String learnedContext = frontendFlowLearningService.enrichWithLearnedFlows(request);
+            if (learnedContext != null) {
+                request.setAdditionalContext(learnedContext);
+            }
+            frontendFlowLearningService.record(request);
             // 2) Geçmiş koşum dersleri: aynı servisin bilinen tuzakları
             request.setAdditionalContext(agentLearningService.enrichWithLearnings(request));
             // 3) Ajan analizi: gözlem + dersler ışığında.

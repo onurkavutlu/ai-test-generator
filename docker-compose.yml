@@ -41,6 +41,10 @@ services:
       # ── Selenium ──
       SELENIUM_HEADLESS: "true"
       SELENIUM_REMOTE_URL: http://selenium-hub:4444/wd/hub
+      # İzole Grid mevcut olduğu için render edilmiş DOM ve yalnız yan etkisiz
+      # kullanıcı-akışı keşfi açık. Bu, doğrulanmış Selenium akış testlerini üretir.
+      RENDERED_DOM_OBSERVATION_ENABLED: "true"
+      FLOW_DISCOVERY_ENABLED: "true"
       # ── Test Output ──
       TEST_OUTPUT_PATH: /tmp/generated-tests
       # ── Email (MailHog) ──

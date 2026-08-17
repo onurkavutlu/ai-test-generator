@@ -8,7 +8,9 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,6 +61,17 @@ class FrameworkTestGeneratorRegistryTest {
 
         assertThrows(NullPointerException.class,
                 () -> registry.generate(TestGenerationRequest.builder().build()));
+    }
+
+    @Test
+    void reportsRegisteredFrameworkCapabilityWithoutExposingConcreteGenerator() {
+        FrameworkTestGeneratorRegistry registry = registry(generator(TestFramework.KARATE),
+                generator(TestFramework.REST_ASSURED), generator(TestFramework.SELENIUM));
+
+        assertTrue(registry.supports(TestFramework.KARATE));
+        assertTrue(registry.supports(TestFramework.REST_ASSURED));
+        assertTrue(registry.supports(TestFramework.SELENIUM));
+        assertFalse(registry.supports(null));
     }
 
     private static FrameworkTestGenerator generator(TestFramework framework) {

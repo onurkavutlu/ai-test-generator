@@ -113,6 +113,21 @@ public class TestSuiteController {
         m.put("passedScenarios", c.getPassedScenarios());
         m.put("totalScenarios", c.getTotalScenarios());
         m.put("lastRunAt", c.getLastRunAt() != null ? c.getLastRunAt().toString() : null);
+        appendEvidence(m, c);
         return m;
+    }
+
+    /** Ham prompt/gözlem metnini değil, kullanıcıya gösterilebilecek kanıt özetini döner. */
+    private static void appendEvidence(Map<String, Object> out, GeneratedTestCase testCase) {
+        var request = testCase.getRequest();
+        String context = request == null ? "" : request.getAdditionalContext();
+        String evidenceType = context != null && context.contains("## OBSERVED USER FLOW")
+                ? "OBSERVED_USER_FLOW"
+                : context != null && context.contains("## OBSERVED") ? "OBSERVED" : "NONE";
+        out.put("requestId", request == null ? null : request.getId());
+        out.put("evidenceType", evidenceType);
+        out.put("deterministic", testCase.isDeterministic());
+        out.put("validationStatus", testCase.getValidationStatus() == null
+                ? "NOT_VALIDATED" : testCase.getValidationStatus().name());
     }
 }

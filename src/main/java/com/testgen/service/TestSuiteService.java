@@ -45,7 +45,10 @@ public class TestSuiteService {
     public TestSuite get(String suiteId) {
         TestSuite suite = suiteRepository.findById(suiteId)
                 .orElseThrow(() -> new IllegalArgumentException("Suite bulunamadı: " + suiteId));
-        suite.getTestCases().size(); // lazy koleksiyonu transaction içinde başlat
+        // Dashboard case'in kaynak requestId'si ve gözlem kanıt türünü de gösterir.
+        // open-in-view kapalıyken bu ilişkiler transaction dışında okunursa UI sessizce
+        // eksik veri gösterir veya LazyInitializationException alır.
+        suite.getTestCases().forEach(this::initializeEvidence);
         return suite;
     }
 
@@ -127,5 +130,12 @@ public class TestSuiteService {
             suite.setLastRunFailed(failed);
             suiteRepository.save(suite);
         });
+    }
+
+    private void initializeEvidence(GeneratedTestCase testCase) {
+        if (testCase.getRequest() != null) {
+            testCase.getRequest().getId();
+            testCase.getRequest().getAdditionalContext();
+        }
     }
 }

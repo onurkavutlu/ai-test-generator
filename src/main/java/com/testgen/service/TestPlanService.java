@@ -53,7 +53,7 @@ public class TestPlanService {
     public TestPlan get(String planId) {
         TestPlan plan = planRepository.findById(planId)
                 .orElseThrow(() -> new IllegalArgumentException("Test plan bulunamadı: " + planId));
-        plan.getSuites().forEach(s -> s.getTestCases().size()); // lazy koleksiyonlar tx içinde açılır
+        plan.getSuites().forEach(s -> s.getTestCases().forEach(this::initializeEvidence));
         return plan;
     }
 
@@ -102,6 +102,13 @@ public class TestPlanService {
             }
         }
         return new ArrayList<>(unique.values());
+    }
+
+    private void initializeEvidence(GeneratedTestCase testCase) {
+        if (testCase.getRequest() != null) {
+            testCase.getRequest().getId();
+            testCase.getRequest().getAdditionalContext();
+        }
     }
 
     /** Plan koşumu bittiğinde özet alanlarını günceller. */

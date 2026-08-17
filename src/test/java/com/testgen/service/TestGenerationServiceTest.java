@@ -44,6 +44,9 @@ public class TestGenerationServiceTest {
     private ObservationService observationService;
 
     @Mock
+    private FrontendFlowLearningService frontendFlowLearningService;
+
+    @Mock
     private com.testgen.generator.TestContentGate testContentGate;
 
     @Mock
