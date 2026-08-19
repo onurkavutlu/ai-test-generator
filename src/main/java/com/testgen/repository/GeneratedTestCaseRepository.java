@@ -4,6 +4,7 @@ import com.testgen.model.GeneratedTestCase;
 import com.testgen.model.TestFramework;
 import com.testgen.model.TestRunStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -61,4 +62,16 @@ public interface GeneratedTestCaseRepository
     long countFailedByRequestIdAndFramework(
             @Param("requestId") String requestId,
             @Param("framework") TestFramework framework);
+
+    /** Saklama temizliği önizlemesi: silinecek case sayısı, içerik yüklenmeden. */
+    @Query("SELECT COUNT(tc) FROM GeneratedTestCase tc WHERE tc.request.id IN :ids")
+    long countByRequestIdIn(@Param("ids") List<String> ids);
+
+    /**
+     * Saklama temizliği: verilen isteklere ait tüm case'leri toplu siler.
+     * İstek satırlarından ÖNCE çağrılmalıdır — {@code request_id} yabancı anahtarı buna bağlı.
+     */
+    @Modifying
+    @Query("DELETE FROM GeneratedTestCase tc WHERE tc.request.id IN :ids")
+    int deleteByRequestIdIn(@Param("ids") List<String> ids);
 }
